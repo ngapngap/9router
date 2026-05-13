@@ -13,8 +13,13 @@ export async function GET() {
     const authMode = settings.authMode || "password";
     const oidcName = String(session?.oidcName || "").trim();
     const oidcEmail = String(session?.oidcEmail || "").trim();
-    const displayName = oidcName || oidcEmail || (session?.oidc ? "OIDC user" : "Password user");
-    const loginMethod = session?.oidc ? "OIDC" : "Password";
+    const saasEnabled = process.env.SAAS_ENABLED === "true";
+    let displayName = oidcName || oidcEmail || (session?.oidc ? "OIDC user" : "Password user");
+    if (session?.saas && session?.sub) {
+      displayName = `User ${session.sub}`;
+    }
+    const loginMethod =
+      session?.saas === true ? "SaaS" : session?.oidc ? "OIDC" : "Password";
 
     return NextResponse.json({
       requireLogin,
@@ -27,6 +32,7 @@ export async function GET() {
       oidcName: oidcName || null,
       oidcEmail: oidcEmail || null,
       oidcLogin: !!session?.oidc,
+      saasEnabled,
     });
   } catch {
     return NextResponse.json({
@@ -40,6 +46,7 @@ export async function GET() {
       oidcName: null,
       oidcEmail: null,
       oidcLogin: false,
+      saasEnabled: process.env.SAAS_ENABLED === "true",
     });
   }
 }

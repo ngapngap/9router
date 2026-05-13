@@ -4,6 +4,10 @@ import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import { setDashboardAuthCookie } from "@/lib/auth/dashboardSession";
 import { isOidcConfigured } from "@/lib/auth/oidc";
+import { isSaasDatabaseConfigured } from "@/lib/saas/pgPool.js";
+import { findUserForLogin } from "@/lib/saas/usersRepo.js";
+import { verifyPassword } from "@/lib/saas/password.js";
+import { computeIsAdmin } from "@/lib/saas/adminPolicy.js";
 
 function isTunnelRequest(request, settings) {
   const host = (request.headers.get("host") || "").split(":")[0].toLowerCase();
@@ -12,12 +16,73 @@ function isTunnelRequest(request, settings) {
   return (tunnelHost && host === tunnelHost) || (tailscaleHost && host === tailscaleHost);
 }
 
+/**
+ * @param {object} row
+ */
+function normalizeUserId(row) {
+  const n = Number(row.id);
+  return Number.isFinite(n) ? n : null;
+}
+
+async function handleSaasLogin(request, body) {
+  if (!isSaasDatabaseConfigured()) {
+    return NextResponse.json({ error: "SaaS database not configured" }, { status: 503 });
+  }
+
+  const settings = await getSettings();
+
+  if (isTunnelRequest(request, settings) && settings.tunnelDashboardAccess !== true) {
+    return NextResponse.json({ error: "Dashboard access via tunnel is disabled" }, { status: 403 });
+  }
+
+  if (settings.authMode === "oidc" && isOidcConfigured(settings)) {
+    return NextResponse.json({ error: "Password login is disabled. Use OIDC sign in." }, { status: 403 });
+  }
+
+  const identifier = typeof body.identifier === "string" ? body.identifier.trim() : "";
+  const password = typeof body.password === "string" ? body.password : "";
+
+  if (!identifier || !password) {
+    return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+  }
+
+  const user = await findUserForLogin(identifier);
+  if (!user) {
+    return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+  }
+
+  const valid = await verifyPassword(password, user.password);
+  if (!valid) {
+    return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+  }
+
+  const userId = normalizeUserId(user);
+  if (userId === null) {
+    return NextResponse.json({ error: "Invalid account" }, { status: 401 });
+  }
+
+  const cookieStore = await cookies();
+  await setDashboardAuthCookie(cookieStore, request, {
+    sub: String(userId),
+    userId,
+    isAdmin: computeIsAdmin(user),
+    saas: true,
+  });
+
+  return NextResponse.json({ success: true });
+}
+
 export async function POST(request) {
   try {
-    const { password } = await request.json();
+    const body = await request.json().catch(() => ({}));
+
+    if (process.env.SAAS_ENABLED === "true") {
+      return await handleSaasLogin(request, body);
+    }
+
+    const { password } = body;
     const settings = await getSettings();
 
-    // Block login via tunnel/tailscale if dashboard access is disabled
     if (isTunnelRequest(request, settings) && settings.tunnelDashboardAccess !== true) {
       return NextResponse.json({ error: "Dashboard access via tunnel is disabled" }, { status: 403 });
     }

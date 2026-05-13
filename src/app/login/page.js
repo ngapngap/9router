@@ -5,6 +5,7 @@ import { Card, Button, Input } from "@/shared/components";
 import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -12,6 +13,7 @@ export default function LoginPage() {
   const [authMode, setAuthMode] = useState("password");
   const [oidcConfigured, setOidcConfigured] = useState(false);
   const [oidcLoginLabel, setOidcLoginLabel] = useState("Sign in with OIDC");
+  const [saasEnabled, setSaasEnabled] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -37,6 +39,11 @@ export default function LoginPage() {
           setAuthMode(data.authMode || "password");
           setOidcConfigured(data.oidcConfigured === true);
           setOidcLoginLabel(data.oidcLoginLabel || "Sign in with OIDC");
+          const saas = data.saasEnabled === true;
+          setSaasEnabled(saas);
+          if (saas) {
+            setHasPassword(true);
+          }
         } else {
           // Safe fallback on non-OK response to avoid infinite loading state.
           setHasPassword(true);
@@ -55,10 +62,13 @@ export default function LoginPage() {
     setError("");
 
     try {
+      const body = saasEnabled
+        ? { identifier: identifier.trim(), password }
+        : { password };
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify(body),
       });
 
       if (res.ok) {
@@ -102,9 +112,11 @@ export default function LoginPage() {
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-primary mb-2">9Router</h1>
           <p className="text-text-muted">
-            {authMode === "oidc" && oidcConfigured
-              ? "Sign in with your OIDC provider to access the dashboard"
-              : "Enter your password to access the dashboard"}
+            {saasEnabled
+              ? "Sign in with your New-API account (email or username and password)."
+              : authMode === "oidc" && oidcConfigured
+                ? "Sign in with your OIDC provider to access the dashboard"
+                : "Enter your password to access the dashboard"}
           </p>
         </div>
 
@@ -132,15 +144,32 @@ export default function LoginPage() {
                   </p>
                 )}
 
+                {saasEnabled && (
+                  <div className="flex flex-col gap-2">
+                    <label className="text-sm font-medium">Email or username</label>
+                    <Input
+                      type="text"
+                      name="identifier"
+                      autoComplete="username"
+                      placeholder="you@example.com or username"
+                      value={identifier}
+                      onChange={(e) => setIdentifier(e.target.value)}
+                      required
+                      autoFocus={!oidcAvailable}
+                    />
+                  </div>
+                )}
+
                 <div className="flex flex-col gap-2">
                   <label className="text-sm font-medium">Password</label>
                   <Input
                     type="password"
+                    name="password"
                     placeholder="Enter password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
-                    autoFocus={!oidcAvailable}
+                    autoFocus={saasEnabled ? false : !oidcAvailable}
                   />
                   {error && <p className="text-xs text-red-500">{error}</p>}
                 </div>
@@ -154,13 +183,17 @@ export default function LoginPage() {
                   Login
                 </Button>
 
-                <p className="text-xs text-center text-text-muted mt-2">
-                  Default password is <code className="bg-sidebar px-1 rounded">123456</code>
-                </p>
-                {hasPassword === false && (
-                  <p className="text-xs text-center text-text-muted">
-                    No custom password is set yet. The default password above will work until you change it.
-                  </p>
+                {!saasEnabled && (
+                  <>
+                    <p className="text-xs text-center text-text-muted mt-2">
+                      Default password is <code className="bg-sidebar px-1 rounded">123456</code>
+                    </p>
+                    {hasPassword === false && (
+                      <p className="text-xs text-center text-text-muted">
+                        No custom password is set yet. The default password above will work until you change it.
+                      </p>
+                    )}
+                  </>
                 )}
               </form>
             ) : (

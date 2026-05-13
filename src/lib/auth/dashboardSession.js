@@ -4,6 +4,14 @@ const SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || "9router-default-secret-change-me"
 );
 
+function getJwtExpirationTime() {
+  if (process.env.SAAS_ENABLED === "true") {
+    const raw = process.env.SAAS_JWT_EXPIRES_IN?.trim();
+    if (raw) return raw;
+  }
+  return "24h";
+}
+
 export function shouldUseSecureCookie(request) {
   const forceSecureCookie = process.env.AUTH_COOKIE_SECURE === "true";
   const forwardedProto = request?.headers?.get?.("x-forwarded-proto");
@@ -15,7 +23,7 @@ export async function createDashboardAuthToken(claims = {}) {
   return new SignJWT({ authenticated: true, ...claims })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .setExpirationTime("24h")
+    .setExpirationTime(getJwtExpirationTime())
     .sign(SECRET);
 }
 
