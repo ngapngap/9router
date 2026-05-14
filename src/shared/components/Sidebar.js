@@ -48,6 +48,7 @@ export default function Sidebar({ onClose }) {
   const [isUpdating, setIsUpdating] = useState(false);
   const [shutdownCountdown, setShutdownCountdown] = useState(0);
   const [enableTranslator, setEnableTranslator] = useState(false);
+  const [saasAccountNav, setSaasAccountNav] = useState(false);
   const { copied, copy } = useCopyToClipboard(2000);
 
   const INSTALL_CMD = UPDATER_CONFIG.installCmdLatest;
@@ -57,6 +58,13 @@ export default function Sidebar({ onClose }) {
       .then(res => res.json())
       .then(data => { if (data.enableTranslator) setEnableTranslator(true); })
       .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/saas/config")
+      .then((res) => res.json())
+      .then((data) => setSaasAccountNav(data.enabled === true))
+      .catch(() => setSaasAccountNav(false));
   }, []);
 
   // Lazy check for new npm version on mount
@@ -301,6 +309,29 @@ export default function Sidebar({ onClose }) {
                 </Link>
               ) : null;
             })}
+
+            {saasAccountNav && (
+              <Link
+                href="/dashboard/account"
+                onClick={onClose}
+                className={cn(
+                  "flex items-center gap-3 px-3 py-1 rounded-lg transition-all group",
+                  isActive("/dashboard/account")
+                    ? "bg-primary/10 text-primary"
+                    : "text-text-muted hover:bg-surface-2 hover:text-text-main"
+                )}
+              >
+                <span
+                  className={cn(
+                    "material-symbols-outlined text-[18px]",
+                    isActive("/dashboard/account") ? "fill-1" : "group-hover:text-primary transition-colors"
+                  )}
+                >
+                  person
+                </span>
+                <span className="text-[13px] font-medium">Account</span>
+              </Link>
+            )}
 
             {/* Settings */}
             <Link

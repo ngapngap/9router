@@ -145,9 +145,18 @@ export default function LoginPage() {
                 )}
 
                 {saasEnabled && (
+                  <p className="text-xs text-text-muted text-center" id="saas-onboarding-hint">
+                    Tài khoản được tạo trong New-API — không đăng ký tại đây.
+                  </p>
+                )}
+
+                {saasEnabled && (
                   <div className="flex flex-col gap-2">
-                    <label className="text-sm font-medium">Email or username</label>
+                    <label className="text-sm font-medium" htmlFor="login-identifier">
+                      Email or username
+                    </label>
                     <Input
+                      id="login-identifier"
                       type="text"
                       name="identifier"
                       autoComplete="username"
@@ -156,23 +165,33 @@ export default function LoginPage() {
                       onChange={(e) => setIdentifier(e.target.value)}
                       required
                       autoFocus={!oidcAvailable}
+                      aria-describedby="saas-onboarding-hint"
                     />
                   </div>
                 )}
 
                 <div className="flex flex-col gap-2">
-                  <label className="text-sm font-medium">Password</label>
+                  <label className="text-sm font-medium" htmlFor="login-password">
+                    Password
+                  </label>
                   <Input
+                    id="login-password"
                     type="password"
                     name="password"
+                    autoComplete="current-password"
                     placeholder="Enter password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
                     autoFocus={saasEnabled ? false : !oidcAvailable}
                   />
-                  {error && <p className="text-xs text-red-500">{error}</p>}
                 </div>
+
+                {error && (
+                  <p className="text-xs text-red-500" role="alert" aria-live="polite">
+                    {error}
+                  </p>
+                )}
 
                 <Button
                   type="submit"

@@ -20,3 +20,19 @@ export async function findUserForLogin(identifier) {
   if (res.rows.length !== 1) return null;
   return res.rows[0];
 }
+
+/**
+ * Đọc hồ sơ hiển thị (không trả password).
+ * @param {number|string} userId
+ */
+export async function getUserAccountById(userId) {
+  const res = await saasQuery(
+    `SELECT id, username, email, display_name, role, status,
+            quota, used_quota, request_count
+     FROM public.users
+     WHERE id = $1 AND deleted_at IS NULL
+     LIMIT 1`,
+    [userId],
+  );
+  return res.rows[0] ?? null;
+}
