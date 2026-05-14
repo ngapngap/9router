@@ -5,8 +5,12 @@
   "private": true,
   "scripts": {
     "dev": "next dev --webpack --port 20128",
-    "build": "NODE_ENV=production next build --webpack",
-    "start": "NODE_ENV=production next start",
+    "lint": "eslint src --max-warnings 0",
+    "lint:ci": "eslint src/lib src/app/api src/dashboardGuard.js src/proxy.js src/sse --max-warnings 0",
+    "test": "npx vitest run --config tests/vitest.config.js",
+    "test:ci": "npx vitest run --config tests/vitest.config.js tests/unit/db-driver-chain.test.js tests/unit/saas-pg-pool.test.js tests/unit/saas-auth-p03.test.js tests/unit/saas-p04-ui.test.js tests/unit/saas-validate-api-key.test.js",
+    "build": "cross-env NODE_ENV=production next build --webpack",
+    "start": "cross-env NODE_ENV=production next start",
     "dev:bun": "bun --bun next dev --webpack --port 20128",
     "build:bun": "NODE_ENV=production bun --bun next build --webpack",
     "start:bun": "NODE_ENV=production bun ./.next/standalone/server.js"
@@ -46,9 +50,11 @@
   "comment_better_sqlite3": "kept in optionalDependencies so npm install doesn't fail on systems without build tools — sql.js is used as fallback at runtime",
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.18",
-    "eslint": "^9",
-    "eslint-config-next": "16.1.6",
+    "cross-env": "^10.1.0",
+    "eslint": "^9.39.4",
+    "eslint-config-next": "^16.1.6",
     "postcss": "^8.5.6",
-    "tailwindcss": "^4"
+    "tailwindcss": "^4",
+    "vitest": "^4.1.6"
   }
 }

@@ -17,5 +17,6 @@ export async function OPTIONS() {
  * POST /v1/web/fetch - Web URL fetch/extract endpoint
  */
 export async function POST(request) {
-  return await handleFetch(request);
+  const { saasV1Entry } = await import("@/lib/saas/v1Request.js");
+  return saasV1Entry(() => handleFetch(request));
 }

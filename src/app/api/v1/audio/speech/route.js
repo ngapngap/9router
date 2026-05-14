@@ -12,5 +12,6 @@ export async function OPTIONS() {
 
 /** POST /v1/audio/speech - OpenAI-compatible TTS endpoint */
 export async function POST(request) {
-  return await handleTts(request);
+  const { saasV1Entry } = await import("@/lib/saas/v1Request.js");
+  return saasV1Entry(() => handleTts(request));
 }

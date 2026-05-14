@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main, master]
+  push:
+    branches: [main, master]
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./9router
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install
+        run: npm install --no-audit --no-fund
+
+      - name: ESLint (scoped — full src lint tracked separately)
+        run: npm run lint:ci
+
+      - name: Unit tests
+        run: npm run test:ci
+
+      - name: Next build
+        env:
+          SAAS_ENABLED: "false"
+        run: npm run build

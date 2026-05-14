@@ -386,17 +386,20 @@ export async function OPTIONS() {
  * GET /v1/models - OpenAI compatible models list (LLM/chat models only by default).
  * For other capabilities use /v1/models/{kind} (image, tts, stt, embedding, image-to-text, web).
  */
-export async function GET() {
-  try {
-    const data = await buildModelsList([LLM_KIND]);
-    return Response.json({ object: "list", data }, {
-      headers: { "Access-Control-Allow-Origin": "*" },
-    });
-  } catch (error) {
-    console.log("Error fetching models:", error);
-    return Response.json(
-      { error: { message: error.message, type: "server_error" } },
-      { status: 500 }
-    );
-  }
+export async function GET(request) {
+  const { runV1WithBearerAuth } = await import("@/lib/saas/v1Request.js");
+  return runV1WithBearerAuth(request, async () => {
+    try {
+      const data = await buildModelsList([LLM_KIND]);
+      return Response.json({ object: "list", data }, {
+        headers: { "Access-Control-Allow-Origin": "*" },
+      });
+    } catch (error) {
+      console.log("Error fetching models:", error);
+      return Response.json(
+        { error: { message: error.message, type: "server_error" } },
+        { status: 500 }
+      );
+    }
+  });
 }

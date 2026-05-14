@@ -17,5 +17,6 @@ export async function OPTIONS() {
  * POST /v1/search - Web search endpoint
  */
 export async function POST(request) {
-  return await handleSearch(request);
+  const { saasV1Entry } = await import("@/lib/saas/v1Request.js");
+  return saasV1Entry(() => handleSearch(request));
 }

@@ -31,6 +31,7 @@ export async function OPTIONS() {
  */
 export async function POST(request) {
   await ensureInitialized();
-  return await handleChat(request);
+  const { saasV1Entry } = await import("@/lib/saas/v1Request.js");
+  return saasV1Entry(() => handleChat(request));
 }
 

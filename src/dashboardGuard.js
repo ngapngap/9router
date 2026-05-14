@@ -53,8 +53,29 @@ async function isAuthenticated(request) {
   return false;
 }
 
+function isPublicSaasApiPath(pathname) {
+  if (pathname.startsWith("/api/auth/")) return true;
+  if (pathname.startsWith("/api/v1/")) return true;
+  if (pathname === "/api/health" || pathname.startsWith("/api/health/")) return true;
+  if (pathname === "/api/saas/config" || pathname.startsWith("/api/saas/config/")) return true;
+  return false;
+}
+
 export async function proxy(request) {
   const { pathname } = request.nextUrl;
+
+  if (process.env.SAAS_ENABLED === "true" && pathname.startsWith("/api/") && !isPublicSaasApiPath(pathname)) {
+    const cliTok = process.env.CLI_TOKEN_9R?.trim();
+    if (cliTok && request.headers.get(CLI_TOKEN_HEADER) === cliTok) {
+      return NextResponse.next();
+    }
+    const token = request.cookies.get("auth_token")?.value;
+    if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!(await verifyDashboardAuthToken(token))) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    return NextResponse.next();
+  }
 
   // Always protected - require valid JWT or local CLI token (machineId-based)
   if (ALWAYS_PROTECTED.some((p) => pathname.startsWith(p))) {
@@ -120,6 +141,3 @@ export async function proxy(request) {
   return NextResponse.next();
 }
 
-export const config = {
-  matcher: ["/", "/dashboard/:path*"],
-};

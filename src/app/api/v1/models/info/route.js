@@ -91,20 +91,23 @@ export async function OPTIONS() {
 
 // GET /v1/models/info?id={alias}/{modelId} — metadata for a single model
 export async function GET(request) {
-  const { searchParams } = new URL(request.url);
-  const id = searchParams.get("id");
-  if (!id) {
-    return Response.json(
-      { error: { message: "Missing required query param: id (e.g. ?id=openai/dall-e-3)", type: "invalid_request_error" } },
-      { status: 400, headers: { "Access-Control-Allow-Origin": "*" } },
-    );
-  }
-  const info = lookup(id);
-  if (!info) {
-    return Response.json(
-      { error: { message: `Model not found: ${id}`, type: "not_found" } },
-      { status: 404, headers: { "Access-Control-Allow-Origin": "*" } },
-    );
-  }
-  return Response.json(info, { headers: { "Access-Control-Allow-Origin": "*" } });
+  const { runV1WithBearerAuth } = await import("@/lib/saas/v1Request.js");
+  return runV1WithBearerAuth(request, async () => {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id");
+    if (!id) {
+      return Response.json(
+        { error: { message: "Missing required query param: id (e.g. ?id=openai/dall-e-3)", type: "invalid_request_error" } },
+        { status: 400, headers: { "Access-Control-Allow-Origin": "*" } },
+      );
+    }
+    const info = lookup(id);
+    if (!info) {
+      return Response.json(
+        { error: { message: `Model not found: ${id}`, type: "not_found" } },
+        { status: 404, headers: { "Access-Control-Allow-Origin": "*" } },
+      );
+    }
+    return Response.json(info, { headers: { "Access-Control-Allow-Origin": "*" } });
+  });
 }

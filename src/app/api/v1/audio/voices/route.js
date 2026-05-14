@@ -18,28 +18,30 @@ export async function OPTIONS() {
 // GET /v1/audio/voices?provider={p}[&lang=xx]
 // Returns OpenAI-style list with each voice's full model id ready for /v1/audio/speech
 export async function GET(request) {
-  try {
-    const { searchParams, origin } = new URL(request.url);
-    const provider = searchParams.get("provider");
-    const lang = searchParams.get("lang");
+  const { runV1WithBearerAuth } = await import("@/lib/saas/v1Request.js");
+  return runV1WithBearerAuth(request, async () => {
+    try {
+      const { searchParams, origin } = new URL(request.url);
+      const provider = searchParams.get("provider");
+      const lang = searchParams.get("lang");
 
-    if (!provider || !PROVIDER_API[provider]) {
-      return Response.json(
-        { error: { message: `provider must be one of: ${Object.keys(PROVIDER_API).join(", ")}`, type: "invalid_request_error" } },
-        { status: 400, headers: { "Access-Control-Allow-Origin": "*" } },
-      );
-    }
+      if (!provider || !PROVIDER_API[provider]) {
+        return Response.json(
+          { error: { message: `provider must be one of: ${Object.keys(PROVIDER_API).join(", ")}`, type: "invalid_request_error" } },
+          { status: 400, headers: { "Access-Control-Allow-Origin": "*" } },
+        );
+      }
 
-    const baseUrl = PROVIDER_API[provider](origin);
-    const url = lang ? `${baseUrl}${baseUrl.includes("?") ? "&" : "?"}lang=${encodeURIComponent(lang)}` : baseUrl;
-    const res = await fetch(url, { cache: "no-store" });
-    const data = await res.json();
-    if (!res.ok || data.error) {
-      return Response.json(
-        { error: { message: data.error || `Upstream ${res.status}`, type: "server_error" } },
-        { status: res.status, headers: { "Access-Control-Allow-Origin": "*" } },
-      );
-    }
+      const baseUrl = PROVIDER_API[provider](origin);
+      const url = lang ? `${baseUrl}${baseUrl.includes("?") ? "&" : "?"}lang=${encodeURIComponent(lang)}` : baseUrl;
+      const res = await fetch(url, { cache: "no-store" });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        return Response.json(
+          { error: { message: data.error || `Upstream ${res.status}`, type: "server_error" } },
+          { status: res.status, headers: { "Access-Control-Allow-Origin": "*" } },
+        );
+      }
 
     // Internal API shape: { voices } when lang filter, else { byLang, languages }
     const rawVoices = lang
@@ -65,4 +67,5 @@ export async function GET(request) {
       { status: 502, headers: { "Access-Control-Allow-Origin": "*" } },
     );
   }
+  });
 }

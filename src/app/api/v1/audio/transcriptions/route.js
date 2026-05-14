@@ -15,5 +15,6 @@ export async function OPTIONS() {
 
 /** POST /v1/audio/transcriptions - OpenAI Whisper compatible STT */
 export async function POST(request) {
-  return await handleStt(request);
+  const { saasV1Entry } = await import("@/lib/saas/v1Request.js");
+  return saasV1Entry(() => handleStt(request));
 }

@@ -26,6 +26,7 @@ export async function OPTIONS() {
  */
 export async function POST(request) {
   await ensureInitialized();
+  const { saasV1Entry } = await import("@/lib/saas/v1Request.js");
   const body = await request.json();
   body._compact = true;
   const newRequest = new Request(request.url, {
@@ -33,5 +34,5 @@ export async function POST(request) {
     headers: request.headers,
     body: JSON.stringify(body)
   });
-  return await handleChat(newRequest);
+  return saasV1Entry(() => handleChat(newRequest));
 }

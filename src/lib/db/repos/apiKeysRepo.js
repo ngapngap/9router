@@ -68,8 +68,20 @@ export async function deleteApiKey(id) {
 }
 
 export async function validateApiKey(key) {
+  const k = typeof key === "string" ? key.trim() : "";
+  if (!k) return false;
+
+  if (process.env.SAAS_ENABLED === "true") {
+    const { findTokenByKeyForProxy } = await import("@/lib/saas/tokensRepo.js");
+    const { setTenantUserId } = await import("@/lib/saas/tenantContext.js");
+    const row = await findTokenByKeyForProxy(k);
+    if (!row?.user_id) return false;
+    setTenantUserId(Number(row.user_id));
+    return true;
+  }
+
   const db = await getAdapter();
-  const row = db.get(`SELECT isActive FROM apiKeys WHERE key = ?`, [key]);
+  const row = db.get(`SELECT isActive FROM apiKeys WHERE key = ?`, [k]);
   if (!row) return false;
   return row.isActive === 1 || row.isActive === true;
 }

@@ -71,3 +71,10 @@ ecosystem.config.*
 scripts/agSniffer/*
 gitbooks/*
 gitbook/README.md
+
+# Planning — chỉ giữ máy local, không đẩy public (clone khác không có các file này)
+/plans/
+/plan/
+/PROJECT_PLAN.md
+/PLAN.md
+/AGENT.md

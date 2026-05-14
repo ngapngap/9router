@@ -23,7 +23,8 @@ export async function OPTIONS() {
 
 export async function POST(request) {
   await ensureInitialized();
-  
+  const { saasV1Entry } = await import("@/lib/saas/v1Request.js");
+
   const clonedReq = request.clone();
   let modelName = "llama3.2";
   try {
@@ -31,7 +32,7 @@ export async function POST(request) {
     modelName = body.model || "llama3.2";
   } catch {}
 
-  const response = await handleChat(request);
+  const response = await saasV1Entry(() => handleChat(request));
   return transformToOllama(response, modelName);
 }
 
