@@ -106,6 +106,10 @@ export default function ProvidersPage() {
     useState(false);
   const [testingMode, setTestingMode] = useState(null);
   const [testResults, setTestResults] = useState(null);
+  const [saasCfg, setSaasCfg] = useState({
+    enabled: false,
+    ramcloudsBaseUrl: "https://ramclouds.me/v1",
+  });
   const notify = useNotificationStore();
   const searchQuery = useHeaderSearchStore((s) => s.query);
   const registerSearch = useHeaderSearchStore((s) => s.register);
@@ -139,6 +143,21 @@ export default function ProvidersPage() {
       if (ca !== cb) return cb - ca;
       return (a.name || "").localeCompare(b.name || "");
     });
+
+  useEffect(() => {
+    fetch("/api/saas/config")
+      .then((r) => r.json())
+      .then((d) =>
+        setSaasCfg({
+          enabled: d.enabled === true,
+          ramcloudsBaseUrl:
+            typeof d.ramcloudsBaseUrl === "string" && d.ramcloudsBaseUrl
+              ? d.ramcloudsBaseUrl
+              : "https://ramclouds.me/v1",
+        }),
+      )
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -315,6 +334,50 @@ export default function ProvidersPage() {
 
   return (
     <div className="flex min-w-0 flex-col gap-6 px-1 sm:px-0">
+      {saasCfg.enabled && (
+        <Card className="border-primary/40 bg-primary/[0.04]">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="success" size="sm">
+                  New-API
+                </Badge>
+                <h2 className="text-lg font-semibold leading-tight">Ramclouds</h2>
+              </div>
+              <p className="text-sm text-text-muted mt-2">
+                Gateway OpenAI-compatible cho hệ sinh thái New-API. Thêm kết nối OpenAI Compatible và dán base URL bên dưới (hoặc Copy).
+              </p>
+              <code className="text-xs mt-2 block break-all rounded bg-sidebar px-2 py-1.5 text-text-main">
+                {saasCfg.ramcloudsBaseUrl}
+              </code>
+            </div>
+            <div className="flex flex-col gap-2 sm:items-end shrink-0">
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(saasCfg.ramcloudsBaseUrl);
+                    notify.success("Copied base URL");
+                  } catch {
+                    notify.error("Could not copy");
+                  }
+                }}
+              >
+                Copy base URL
+              </Button>
+              <Link
+                href="/dashboard/providers/new"
+                className="text-xs text-primary hover:underline self-start sm:self-end"
+              >
+                Add compatible provider →
+              </Link>
+            </div>
+          </div>
+        </Card>
+      )}
+
       {!hasAnyResult && (
         <div className="text-center py-8 border border-dashed border-border rounded-xl">
           <span className="material-symbols-outlined text-[32px] text-text-muted mb-2">
