@@ -14,7 +14,8 @@ export function isSaasDatabaseConfigured() {
 }
 
 /**
- * PostgreSQL pool for New-API (read-only usage planned in later phases).
+ * PostgreSQL pool — DB New-API **đã có sẵn** (vd. Postgres trên VPS). App chỉ **đọc** (login, token proxy, admin list…).
+ * Không chạy migration trên Postgres này; mọi SQLite tenant vẫn nằm dưới DATA_DIR.
  * @returns {import("pg").Pool | null}
  */
 export function getSaasPool() {
