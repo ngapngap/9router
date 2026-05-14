@@ -1,7 +1,11 @@
+# Build image trên GitHub → GHCR. VPS: docker login (nếu repo package private) → pull → run.
+# Image: ghcr.io/<OWNER>/<REPO>:latest (nhánh default), :sha-<short>, hoặc semver khi push tag v*
+
 name: Build and Push Docker Image
 
 on:
   push:
+    branches: [main, master]
     tags:
       - "v*"
   workflow_dispatch:
@@ -44,6 +48,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
+          file: ./Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
