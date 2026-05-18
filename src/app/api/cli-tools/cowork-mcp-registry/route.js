@@ -59,6 +59,9 @@ async function fetchAll() {
 }
 
 export async function GET(request) {
+  if (process.env.SAAS_ENABLED === "true") {
+    return NextResponse.json({ error: "not_available_in_saas" }, { status: 404 });
+  }
   const { searchParams } = new URL(request.url);
   const force = searchParams.get("refresh") === "1";
   const cache = gcache();

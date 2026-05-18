@@ -40,6 +40,9 @@ const get9RouterEntry = (config) => {
 
 // GET - Read current copilot config
 export async function GET() {
+  if (process.env.SAAS_ENABLED === "true") {
+    return NextResponse.json({ error: "not_available_in_saas" }, { status: 404 });
+  }
   try {
     const config = await readConfig();
     const entry = get9RouterEntry(config);
@@ -60,6 +63,9 @@ export async function GET() {
 
 // POST - Apply 9Router config to chatLanguageModels.json
 export async function POST(request) {
+  if (process.env.SAAS_ENABLED === "true") {
+    return NextResponse.json({ error: "not_available_in_saas" }, { status: 404 });
+  }
   try {
     const { baseUrl, apiKey, models } = await request.json();
 
@@ -119,6 +125,9 @@ export async function POST(request) {
 
 // DELETE - Remove 9Router entry from chatLanguageModels.json
 export async function DELETE() {
+  if (process.env.SAAS_ENABLED === "true") {
+    return NextResponse.json({ error: "not_available_in_saas" }, { status: 404 });
+  }
   try {
     const configPath = getConfigPath();
 

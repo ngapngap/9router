@@ -99,6 +99,9 @@ const has9RouterConfig = (modelCfg) => {
 };
 
 export async function GET() {
+  if (process.env.SAAS_ENABLED === "true") {
+    return NextResponse.json({ error: "not_available_in_saas" }, { status: 404 });
+  }
   try {
     const installed = await checkHermesInstalled();
     if (!installed) {
@@ -119,6 +122,9 @@ export async function GET() {
 }
 
 export async function POST(request) {
+  if (process.env.SAAS_ENABLED === "true") {
+    return NextResponse.json({ error: "not_available_in_saas" }, { status: 404 });
+  }
   try {
     const { baseUrl, apiKey, model } = await request.json();
     if (!baseUrl || !model) {
@@ -154,6 +160,9 @@ export async function POST(request) {
 }
 
 export async function DELETE() {
+  if (process.env.SAAS_ENABLED === "true") {
+    return NextResponse.json({ error: "not_available_in_saas" }, { status: 404 });
+  }
   try {
     const configPath = getHermesConfigPath();
     let yaml = "";

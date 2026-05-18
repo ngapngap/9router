@@ -82,6 +82,9 @@ async function probeMcp(url) {
 }
 
 export async function POST(request) {
+  if (process.env.SAAS_ENABLED === "true") {
+    return NextResponse.json({ error: "not_available_in_saas" }, { status: 404 });
+  }
   try {
     const { url } = await request.json();
     if (!url || typeof url !== "string") {

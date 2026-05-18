@@ -23,6 +23,7 @@ export default function CLIToolsPageClient({ machineId }) {
   const [tailscaleUrl, setTailscaleUrl] = useState("");
   const [apiKeys, setApiKeys] = useState([]);
   const [toolStatuses, setToolStatuses] = useState({});
+  const [saasEnabled, setSaasEnabled] = useState(false);
 
   const fetchAllStatuses = async () => {
     try {
@@ -88,6 +89,13 @@ export default function CLIToolsPageClient({ machineId }) {
     fetchAllStatuses();
   }, []);
 
+  useEffect(() => {
+    fetch("/api/saas/config")
+      .then(r => r.json())
+      .then(d => setSaasEnabled(!!d.enabled))
+      .catch(() => {});
+  }, []);
+
   const getActiveProviders = () => connections.filter(c => c.isActive !== false);
 
   const getAllAvailableModels = () => {
@@ -121,6 +129,15 @@ export default function CLIToolsPageClient({ machineId }) {
     if (typeof window !== "undefined") return window.location.origin;
     return "http://localhost:20128";
   };
+
+  if (saasEnabled) {
+    return (
+      <div className="p-6 text-center">
+        <h2 className="text-lg font-semibold text-text-main mb-2">CLI Tools không khả dụng</h2>
+        <p className="text-sm text-text-muted">Trong chế độ SaaS, cấu hình CLI Tools được quản lý riêng trên máy cục bộ của bạn.</p>
+      </div>
+    );
+  }
 
   if (loading) {
     return (

@@ -49,6 +49,9 @@ const has9RouterConfig = (config) => {
 
 // GET - Check opencode CLI and read current settings
 export async function GET() {
+  if (process.env.SAAS_ENABLED === "true") {
+    return NextResponse.json({ error: "not_available_in_saas" }, { status: 404 });
+  }
   try {
     const isInstalled = await checkOpenCodeInstalled();
 
@@ -83,6 +86,9 @@ export async function GET() {
 
 // POST - Apply 9Router as openai-compatible provider (multi-model support)
 export async function POST(request) {
+  if (process.env.SAAS_ENABLED === "true") {
+    return NextResponse.json({ error: "not_available_in_saas" }, { status: 404 });
+  }
   try {
     const { baseUrl, apiKey, model, models, activeModel, subagentModel } = await request.json();
 
@@ -168,6 +174,9 @@ export async function POST(request) {
 
 // PATCH - Update specific settings (e.g., clear active model)
 export async function PATCH(request) {
+  if (process.env.SAAS_ENABLED === "true") {
+    return NextResponse.json({ error: "not_available_in_saas" }, { status: 404 });
+  }
   try {
     const { clearActiveModel } = await request.json();
     const configPath = getConfigPath();
@@ -204,6 +213,9 @@ export async function PATCH(request) {
 
 // DELETE - Remove 9Router provider or specific models from config
 export async function DELETE(request) {
+  if (process.env.SAAS_ENABLED === "true") {
+    return NextResponse.json({ error: "not_available_in_saas" }, { status: 404 });
+  }
   try {
     const { searchParams } = new URL(request.url);
     const modelToRemove = searchParams.get("model");

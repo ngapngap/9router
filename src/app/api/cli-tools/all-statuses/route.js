@@ -27,6 +27,9 @@ const STATUS_GETTERS = {
 
 // Batch endpoint: gather all CLI tool statuses in one round-trip
 export async function GET() {
+  if (process.env.SAAS_ENABLED === "true") {
+    return NextResponse.json({ error: "not_available_in_saas" }, { status: 404 });
+  }
   const entries = await Promise.all(
     Object.entries(STATUS_GETTERS).map(async ([toolId, getter]) => {
       try {

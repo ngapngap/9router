@@ -52,6 +52,9 @@ const has9RouterConfig = (settings) => {
 
 // GET - Check droid CLI and read current settings
 export async function GET() {
+  if (process.env.SAAS_ENABLED === "true") {
+    return NextResponse.json({ error: "not_available_in_saas" }, { status: 404 });
+  }
   try {
     const isInstalled = await checkDroidInstalled();
     
@@ -81,6 +84,9 @@ export async function GET() {
 // Accepts either `model` (string, legacy single-model) or `models` (array of strings, multi-model)
 // Also accepts `activeModel` to set which model is active/primary
 export async function POST(request) {
+  if (process.env.SAAS_ENABLED === "true") {
+    return NextResponse.json({ error: "not_available_in_saas" }, { status: 404 });
+  }
   try {
     const { baseUrl, apiKey, model, models, activeModel } = await request.json();
     
@@ -171,6 +177,9 @@ export async function POST(request) {
 
 // DELETE - Remove 9Router customModels only (keep other settings)
 export async function DELETE() {
+  if (process.env.SAAS_ENABLED === "true") {
+    return NextResponse.json({ error: "not_available_in_saas" }, { status: 404 });
+  }
   try {
     const settingsPath = getDroidSettingsPath();
 

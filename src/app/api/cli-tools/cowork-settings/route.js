@@ -223,6 +223,9 @@ async function writeSkipApprovals(managedServers) {
 }
 
 export async function GET() {
+  if (process.env.SAAS_ENABLED === "true") {
+    return NextResponse.json({ error: "not_available_in_saas" }, { status: 404 });
+  }
   try {
     const installed = await checkInstalled();
     if (!installed) {
@@ -290,6 +293,9 @@ export async function GET() {
 }
 
 export async function POST(request) {
+  if (process.env.SAAS_ENABLED === "true") {
+    return NextResponse.json({ error: "not_available_in_saas" }, { status: 404 });
+  }
   try {
     const { baseUrl, apiKey, models, plugins, localPlugins, customPlugins } = await request.json();
 
@@ -361,6 +367,9 @@ export async function POST(request) {
 }
 
 export async function DELETE() {
+  if (process.env.SAAS_ENABLED === "true") {
+    return NextResponse.json({ error: "not_available_in_saas" }, { status: 404 });
+  }
   try {
     const meta = await readJson(await getMetaPath());
     if (!meta?.appliedId) {

@@ -52,6 +52,9 @@ const readSettings = async () => {
 
 // GET - Check claude CLI and read current settings
 export async function GET() {
+  if (process.env.SAAS_ENABLED === "true") {
+    return NextResponse.json({ error: "not_available_in_saas" }, { status: 404 });
+  }
   try {
     const isInstalled = await checkClaudeInstalled();
     
@@ -83,6 +86,9 @@ export async function GET() {
 
 // POST - Backup old fields and write new settings
 export async function POST(request) {
+  if (process.env.SAAS_ENABLED === "true") {
+    return NextResponse.json({ error: "not_available_in_saas" }, { status: 404 });
+  }
   try {
     const { env } = await request.json();
     
@@ -155,6 +161,9 @@ const RESET_ENV_KEYS = [
 
 // DELETE - Reset settings (remove env fields)
 export async function DELETE() {
+  if (process.env.SAAS_ENABLED === "true") {
+    return NextResponse.json({ error: "not_available_in_saas" }, { status: 404 });
+  }
   try {
     const settingsPath = getClaudeSettingsPath();
 

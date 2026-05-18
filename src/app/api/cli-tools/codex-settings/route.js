@@ -81,6 +81,9 @@ const has9RouterConfig = (config) => {
 
 // GET - Check codex CLI and read current settings
 export async function GET() {
+  if (process.env.SAAS_ENABLED === "true") {
+    return NextResponse.json({ error: "not_available_in_saas" }, { status: 404 });
+  }
   try {
     const isInstalled = await checkCodexInstalled();
     
@@ -108,6 +111,9 @@ export async function GET() {
 
 // POST - Update 9Router settings (merge with existing config)
 export async function POST(request) {
+  if (process.env.SAAS_ENABLED === "true") {
+    return NextResponse.json({ error: "not_available_in_saas" }, { status: 404 });
+  }
   try {
     const { baseUrl, apiKey, model, subagentModel } = await request.json();
     
@@ -177,6 +183,9 @@ export async function POST(request) {
 
 // DELETE - Remove 9Router settings only (keep other settings)
 export async function DELETE() {
+  if (process.env.SAAS_ENABLED === "true") {
+    return NextResponse.json({ error: "not_available_in_saas" }, { status: 404 });
+  }
   try {
     const configPath = getCodexConfigPath();
 
