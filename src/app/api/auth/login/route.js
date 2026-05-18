@@ -8,7 +8,7 @@ import { isSaasDatabaseConfigured } from "@/lib/saas/pgPool.js";
 import { findUserForLogin } from "@/lib/saas/usersRepo.js";
 import { verifyPassword } from "@/lib/saas/password.js";
 import { computeIsAdmin } from "@/lib/saas/adminPolicy.js";
-import { checkRateLimit } from "@/lib/saas/rateLimit.js";
+import { checkRateLimit } from "@/lib/rateLimit.js";
 
 function isTunnelRequest(request, settings) {
   const host = (request.headers.get("host") || "").split(":")[0].toLowerCase();
