@@ -25,12 +25,12 @@ export async function GET(request) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  writeAuditLog({ action: "admin_overview", userId: uid, detail: `q=${q} limit=${limit}` });
-
   const { searchParams } = new URL(request.url);
   const afterId = Number(searchParams.get("afterId") || "0") || 0;
   const limit = Number(searchParams.get("limit") || "50") || 50;
   const q = (searchParams.get("q") || "").trim();
+
+  writeAuditLog({ action: "admin_overview", userId: uid, detail: `q=${q} limit=${limit}` });
 
   const { users, hasMore, nextCursor } = await listUsersAdmin({ afterId, limit, q });
 
