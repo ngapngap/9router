@@ -113,7 +113,7 @@ export default function LoginPage() {
           <h1 className="text-3xl font-bold text-primary mb-2">RamRouter</h1>
           <p className="text-text-muted">
             {saasEnabled
-              ? "Sign in with your New-API account (email or username and password)."
+              ? "Đăng nhập bằng tài khoản ramclouds.me (email hoặc username và mật khẩu)."
               : authMode === "oidc" && oidcConfigured
                 ? "Sign in with your OIDC provider to access the dashboard"
                 : "Enter your password to access the dashboard"}
@@ -146,7 +146,7 @@ export default function LoginPage() {
 
                 {saasEnabled && (
                   <p className="text-xs text-text-muted text-center" id="saas-onboarding-hint">
-                    Tài khoản được tạo trong New-API — không đăng ký tại đây.
+                    Tài khoản sử dụng tại ramclouds.me — không đăng ký tại đây.
                   </p>
                 )}
 
