@@ -11,7 +11,7 @@ export async function findTokenByKeyForProxy(rawKey) {
   const res = await saasQuery(
     `SELECT id, user_id, status
      FROM public.tokens
-     WHERE key = $1 AND deleted_at IS NULL
+     WHERE TRIM(key::text) = $1 AND deleted_at IS NULL
      LIMIT 1`,
     [key],
   );
