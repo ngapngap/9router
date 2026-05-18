@@ -8,6 +8,7 @@ import { isSaasDatabaseConfigured } from "@/lib/saas/pgPool.js";
 import { findUserForLogin } from "@/lib/saas/usersRepo.js";
 import { verifyPassword } from "@/lib/saas/password.js";
 import { computeIsAdmin } from "@/lib/saas/adminPolicy.js";
+import { checkRateLimit } from "@/lib/saas/rateLimit.js";
 
 function isTunnelRequest(request, settings) {
   const host = (request.headers.get("host") || "").split(":")[0].toLowerCase();
@@ -76,9 +77,14 @@ export async function POST(request) {
   try {
     const body = await request.json().catch(() => ({}));
 
-    if (process.env.SAAS_ENABLED === "true") {
-      return await handleSaasLogin(request, body);
+  if (process.env.SAAS_ENABLED === "true") {
+    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "unknown";
+    const rl = checkRateLimit(ip);
+    if (!rl.allowed) {
+      return NextResponse.json({ error: "Too many requests" }, { status: 429, headers: { "Retry-After": String(Math.ceil((rl.resetMs - Date.now()) / 1000)) } });
     }
+    return await handleSaasLogin(request, body);
+  }
 
     const { password } = body;
     const settings = await getSettings();
