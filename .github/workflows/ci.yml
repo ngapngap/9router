@@ -51,6 +51,13 @@ jobs:
           JWT_SECRET: "ci-test-secret-not-for-prod"
         run: npm run build
 
+      - name: Unit tests (SAAS_ENABLED=true)
+        env:
+          SAAS_ENABLED: "true"
+          SAAS_DATABASE_URL: "postgresql://mock:mock@localhost:5432/mock"
+          JWT_SECRET: "ci-test-secret-not-for-prod"
+        run: npm run test:ci
+
   security-scan:
     runs-on: ubuntu-latest
     continue-on-error: true
