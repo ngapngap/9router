@@ -63,7 +63,7 @@ export default function AccountPage() {
       const blob = await res.blob();
       const cd = res.headers.get("Content-Disposition") || "";
       const m = /filename="([^"]+)"/.exec(cd);
-      const name = m ? m[1] : "9router-export.json";
+      const name = m ? m[1] : "ramrouter-export.json";
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;

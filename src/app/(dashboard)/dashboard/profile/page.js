@@ -38,6 +38,14 @@ export default function ProfilePage() {
   const [proxyStatus, setProxyStatus] = useState({ type: "", message: "" });
   const [proxyLoading, setProxyLoading] = useState(false);
   const [proxyTestLoading, setProxyTestLoading] = useState(false);
+  const [saasEnabled, setSaasEnabled] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/saas/config")
+      .then(r => r.json())
+      .then(d => setSaasEnabled(!!d.enabled))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     fetch("/api/settings")
@@ -465,7 +473,7 @@ export default function ProfilePage() {
       const anchor = document.createElement("a");
       const stamp = new Date().toISOString().replace(/[.:]/g, "-");
       anchor.href = url;
-      anchor.download = `9router-backup-${stamp}.json`;
+      anchor.download = `ramrouter-backup-${stamp}.json`;
       document.body.appendChild(anchor);
       anchor.click();
       document.body.removeChild(anchor);
@@ -555,7 +563,7 @@ export default function ProfilePage() {
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 rounded-lg bg-bg border border-border gap-2">
               <div>
                 <p className="font-medium text-sm sm:text-base">Database Location</p>
-                <p className="text-xs sm:text-sm text-text-muted font-mono break-all">~/.9router/db/data.sqlite</p>
+                <p className="text-xs sm:text-sm text-text-muted font-mono break-all">~/.ramrouter/db/data.sqlite</p>
               </div>
             </div>
             <div className="flex flex-col sm:flex-row gap-2">
@@ -615,7 +623,7 @@ export default function ProfilePage() {
                 disabled={loading}
               />
             </div>
-            {settings.requireLogin === true && (
+            {settings.requireLogin === true && !saasEnabled && (
               <form onSubmit={handlePasswordChange} className="flex flex-col gap-4 pt-4 border-t border-border/50">
                 {settings.hasPassword && (
                   <div className="flex flex-col gap-2">
@@ -671,6 +679,14 @@ export default function ProfilePage() {
                   </Button>
                 </div>
               </form>
+            )}
+            {settings.requireLogin === true && saasEnabled && (
+              <Card>
+                <h2 className="text-base font-medium mb-2">Mật khẩu</h2>
+                <p className="text-sm text-text-muted">
+                  Mật khẩu được quản lý bởi New-API. Vui lòng đổi mật khẩu thông qua hệ thống New-API.
+                </p>
+              </Card>
             )}
           </div>
         </Card>
@@ -747,7 +763,7 @@ export default function ProfilePage() {
               <div className="flex flex-col gap-2">
                 <label className="font-medium text-sm sm:text-base">Issuer URL</label>
                 <Input
-                  placeholder="https://auth.example.com/application/o/9router/"
+                  placeholder="https://auth.example.com/application/o/ramrouter/"
                   value={oidcForm.oidcIssuerUrl}
                   onChange={(e) => updateOidcForm("oidcIssuerUrl", e.target.value)}
                   disabled={loading || oidcLoading}
@@ -757,7 +773,7 @@ export default function ProfilePage() {
               <div className="flex flex-col gap-2">
                 <label className="font-medium text-sm sm:text-base">Client ID</label>
                 <Input
-                  placeholder="9router-dashboard"
+                  placeholder="ramrouter-dashboard"
                   value={oidcForm.oidcClientId}
                   onChange={(e) => updateOidcForm("oidcClientId", e.target.value)}
                   disabled={loading || oidcLoading}

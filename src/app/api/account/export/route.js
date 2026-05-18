@@ -20,7 +20,7 @@ export async function GET() {
   try {
     const payload = await exportUserRouterConfig(userId);
     const body = JSON.stringify(payload);
-    const filename = `9router-export-${userId}.json`;
+    const filename = `ramrouter-export-${userId}.json`;
     return new NextResponse(body, {
       status: 200,
       headers: {
