@@ -4,12 +4,21 @@ import os from "node:os";
 import path from "node:path";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
+// next/headers cookies() needs a request scope; stub it for unit tests so
+// driver fallback can be exercised without a Next.js request context.
+vi.mock("next/headers", () => ({
+  cookies: async () => ({ get: () => undefined }),
+}));
+
 let tempDir;
 const originalDataDir = process.env.DATA_DIR;
+const originalSaasEnabled = process.env.SAAS_ENABLED;
 
 beforeEach(() => {
   tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "9router-chain-"));
   process.env.DATA_DIR = tempDir;
+  // Force default-adapter path; SaaS adapter resolution depends on request scope.
+  process.env.SAAS_ENABLED = "false";
   delete global._dbAdapter;
   vi.resetModules();
 });
@@ -20,6 +29,8 @@ afterEach(() => {
   if (tempDir) fs.rmSync(tempDir, { recursive: true, force: true });
   if (originalDataDir === undefined) delete process.env.DATA_DIR;
   else process.env.DATA_DIR = originalDataDir;
+  if (originalSaasEnabled === undefined) delete process.env.SAAS_ENABLED;
+  else process.env.SAAS_ENABLED = originalSaasEnabled;
 });
 
 describe("Driver fallback chain", () => {
