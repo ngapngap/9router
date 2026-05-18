@@ -1,10 +1,14 @@
 import { getConsoleLogs, getConsoleEmitter, initConsoleLogCapture } from "@/lib/consoleLogBuffer";
+import { requireSaasAdminOrSelfHost } from "@/lib/saas/requireAdmin";
 
 export const dynamic = "force-dynamic";
 
 initConsoleLogCapture();
 
 export async function GET(request) {
+  const gate = await requireSaasAdminOrSelfHost();
+  if (!gate.ok) return gate.response;
+
   const encoder = new TextEncoder();
   const emitter = getConsoleEmitter();
   const state = { closed: false, send: null, sendClear: null, keepalive: null };

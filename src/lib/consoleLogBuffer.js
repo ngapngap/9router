@@ -54,6 +54,14 @@ function appendLine(line) {
 export function initConsoleLogCapture() {
   if (state.patched) return;
 
+  // SaaS isolation: the buffer is global to the process and would mix logs
+  // across every tenant (API keys, paths, models, errors). Disable capture
+  // entirely unless the operator explicitly opts in.
+  if (process.env.SAAS_ENABLED === "true" && process.env.SAAS_ENABLE_CONSOLE_LOGS_FOR_ADMIN !== "true") {
+    state.patched = true; // mark patched so we don't re-check on every request
+    return;
+  }
+
   for (const level of consoleLevels) {
     state.originals[level] = console[level];
     console[level] = (...args) => {

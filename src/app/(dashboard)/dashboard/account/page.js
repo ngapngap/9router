@@ -101,7 +101,7 @@ export default function AccountPage() {
       <div>
         <h1 className="text-xl font-semibold">Account</h1>
         <p className="text-sm text-text-muted mt-1">
-          Thông tin đọc từ New-API (Postgres). Quản lý mật khẩu và API key tạo tại New-API — không đổi được ở đây.
+          Thông tin tài khoản chỉ hiển thị. Mật khẩu và API key được quản lý ở hệ thống tài khoản — không thay đổi tại đây.
         </p>
       </div>
 
@@ -146,9 +146,9 @@ export default function AccountPage() {
       </Card>
 
       <Card>
-        <h2 className="text-base font-medium mb-2">API keys (New-API)</h2>
+        <h2 className="text-base font-medium mb-2">API keys</h2>
         <p className="text-xs text-text-muted mb-3">
-          Key hiển thị che một phần. Tạo hoặc thu hồi key trong New-API.
+          Key hiển thị che một phần. Tạo hoặc thu hồi key ở hệ thống tài khoản.
         </p>
         {tokens.length === 0 ? (
           <p className="text-sm text-text-muted">Chưa có token hoặc không có bản ghi hiển thị.</p>
