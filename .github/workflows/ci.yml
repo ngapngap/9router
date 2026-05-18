@@ -72,4 +72,11 @@ jobs:
           scan-ref: "."
           severity: "CRITICAL,HIGH"
           exit-code: "0"
-          format: "table"
+          format: "sarif"
+          output-file: "trivy-results.sarif"
+
+      - name: Upload Trivy results to GitHub Security tab
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: "trivy-results.sarif"
