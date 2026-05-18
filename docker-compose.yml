@@ -6,7 +6,7 @@
 #
 # Port 20130 (SaaS fork) — khác 20128 của 9router gốc.
 # Mount volume saas-data vào DATA_DIR (/app/data) để giữ SQLite per-user.
-# Kết nối Postgres New-API qua mạng Tailscale hoặc Docker network.
+# Kết nối Postgres New-API qua external network (new-api_default).
 
 services:
   9router-saas:
@@ -21,6 +21,14 @@ services:
       - saas-data:/app/data
     environment:
       - PORT=20130
+      # Override SAAS_DATABASE_URL để dùng DNS name postgres-core
+      # qua external network new-api_default (không dùng localhost trong container)
+      - SAAS_DATABASE_URL=postgresql://root:suX9BKpjFD9-@postgres-core:5432/new-api?sslmode=disable
+    networks:
+      - default
+      - new-api
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:20130/api/health"]
       interval: 30s
@@ -31,3 +39,8 @@ services:
 volumes:
   saas-data:
     name: 9router-saas-data
+
+networks:
+  new-api:
+    external: true
+    name: new-api_default
