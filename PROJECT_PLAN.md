@@ -116,11 +116,20 @@ Một plan được coi là **đủ** khi:
 | P01 | Nhánh feature, PROJECT_PLAN/plans tracked | [x] |
 | P02 | `SAAS_DATABASE_URL`, pool, healthcheck kết nối DB | [x] |
 | P03 | Login + JWT; không đổi MK; không ghi Postgres | [x] |
+| P03.1 | Rate limiting `/api/auth/login` 5 req/min/IP (`src/lib/rateLimit.js`) | [x] |
 | P04 | UI login; account chỉ đọc; export user-scope; **Ramclouds** preset (§7) | [x] |
+| P04.1 | Import endpoint `POST /api/account/import` + payload limit 5 MB | [x] |
 | P05 | Chat/proxy resolve user từ `tokens.key` | [x] |
+| P05.1 | bpchar padding: TRIM(key::text) cả `findTokenByKeyForProxy` lẫn `listTokensByUserId` | [x] |
 | P06 | Bảo vệ API dashboard multi-tenant | [x] |
+| P06.1 | Tenant isolation test (assertSafeUserId, cross-tenant, rate limiter) | [x] |
 | P07 | Workflow GH build Docker image | [x] |
+| P07.1 | CI build-saas + unit tests SAAS_ENABLED=true | [x] |
+| P07.2 | Trivy security scan (fs mode, CRITICAL+HIGH, continue-on-error) | [x] |
 | P08 | Admin: nhận diện + overview tenant; không export nội dung user khác mặc định | [x] |
+| P08.1 | `SAAS_ADMIN_ROLE_VALUES` + `SAAS_ADMIN_FALLBACK_USER_ID` (numeric validation) | [x] |
+| P08.2 | Admin UI: KPI 3 thẻ, toolbar, cột role/status/mtime, `totalUsersInDb` | [x] |
+| P08.3 | Audit log module `src/lib/saas/auditLog.js` + tích hợp admin overview | [x] |
 
 ### Issue GitHub (pha đang làm)
 
