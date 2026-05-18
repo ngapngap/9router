@@ -94,6 +94,16 @@ export async function proxy(request) {
 
   // Protect all dashboard routes
   if (pathname.startsWith("/dashboard")) {
+    // SaaS mode: luôn yêu cầu JWT login cho dashboard — không phụ thuộc settings.requireLogin
+    if (process.env.SAAS_ENABLED === "true") {
+      const token = request.cookies.get("auth_token")?.value;
+      if (token && await verifyDashboardAuthToken(token)) {
+        return NextResponse.next();
+      }
+      return NextResponse.redirect(new URL("/login", request.url));
+    }
+
+    // Self-host mode: logic cũ giữ nguyên
     let requireLogin = true;
     let tunnelDashboardAccess = true;
 
@@ -140,4 +150,12 @@ export async function proxy(request) {
 
   return NextResponse.next();
 }
+
+export const config = {
+  matcher: [
+    "/",
+    "/dashboard/:path*",
+    "/api/:path*",
+  ],
+};
 
