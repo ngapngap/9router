@@ -566,42 +566,10 @@ export default function ProfilePage() {
                 <p className="text-xs sm:text-sm text-text-muted font-mono break-all">~/.ramrouter/db/data.sqlite</p>
               </div>
             </div>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <Button
-                variant="secondary"
-                icon="download"
-                onClick={handleExportDatabase}
-                loading={dbLoading}
-                className="w-full sm:w-auto"
-              >
-                Download Backup
-              </Button>
-              <Button
-                variant="outline"
-                icon="upload"
-                onClick={() => importFileRef.current?.click()}
-                disabled={dbLoading}
-                className="w-full sm:w-auto"
-              >
-                Import Backup
-              </Button>
-              <input
-                ref={importFileRef}
-                type="file"
-                accept="application/json,.json"
-                className="hidden"
-                onChange={handleImportDatabase}
-              />
-            </div>
-            {dbStatus.message && (
-              <p className={`text-sm ${dbStatus.type === "error" ? "text-red-500" : "text-green-600 dark:text-green-400"}`}>
-                {dbStatus.message}
-              </p>
-            )}
-          </div>
         </Card>
 
         {/* Security */}
+        {!saasEnabled && (
         <Card>
           <div className="flex items-center gap-3 mb-4">
             <div className="p-2 rounded-lg bg-primary/10 text-primary shrink-0">
@@ -690,8 +658,10 @@ export default function ProfilePage() {
             )}
           </div>
         </Card>
+        )}
 
         {/* OIDC */}
+        {!saasEnabled && (
         <Card>
           <button
             type="button"
@@ -853,6 +823,7 @@ export default function ProfilePage() {
           </div>
           )}
         </Card>
+        )}
 
         {/* Routing Preferences */}
         <Card>
@@ -946,6 +917,7 @@ export default function ProfilePage() {
         </Card>
 
         {/* Network */}
+        {!saasEnabled && (
         <Card>
           <div className="flex items-center gap-3 mb-4">
             <div className="p-2 rounded-lg bg-purple-500/10 text-purple-500 shrink-0">
@@ -1016,8 +988,10 @@ export default function ProfilePage() {
             )}
           </div>
         </Card>
+        )}
 
         {/* Observability Settings */}
+        {!saasEnabled && (
         <Card>
           <div className="flex items-center gap-3 mb-4">
             <div className="p-2 rounded-lg bg-orange-500/10 text-orange-500 shrink-0">
@@ -1039,6 +1013,7 @@ export default function ProfilePage() {
             />
           </div>
         </Card>
+        )}
 
         {/* App Info */}
         <div className="text-center text-xs sm:text-sm text-text-muted py-4">

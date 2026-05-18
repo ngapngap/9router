@@ -51,6 +51,9 @@ function countBoundConnections(connections = [], proxyPoolId) {
 
 // GET /api/proxy-pools/[id] - Get proxy pool
 export async function GET(request, { params }) {
+  if (process.env.SAAS_ENABLED === "true") {
+    return NextResponse.json({ error: "not_available_in_saas" }, { status: 404 });
+  }
   try {
     const { id } = await params;
     const proxyPool = await getProxyPoolById(id);
@@ -68,6 +71,9 @@ export async function GET(request, { params }) {
 
 // PUT /api/proxy-pools/[id] - Update proxy pool
 export async function PUT(request, { params }) {
+  if (process.env.SAAS_ENABLED === "true") {
+    return NextResponse.json({ error: "not_available_in_saas" }, { status: 404 });
+  }
   try {
     const { id } = await params;
     const existing = await getProxyPoolById(id);
@@ -93,6 +99,9 @@ export async function PUT(request, { params }) {
 
 // DELETE /api/proxy-pools/[id] - Delete proxy pool
 export async function DELETE(request, { params }) {
+  if (process.env.SAAS_ENABLED === "true") {
+    return NextResponse.json({ error: "not_available_in_saas" }, { status: 404 });
+  }
   try {
     const { id } = await params;
     const existing = await getProxyPoolById(id);

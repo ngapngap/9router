@@ -43,6 +43,9 @@ function buildUsageMap(connections = []) {
 
 // GET /api/proxy-pools - List proxy pools
 export async function GET(request) {
+  if (process.env.SAAS_ENABLED === "true") {
+    return NextResponse.json({ error: "not_available_in_saas" }, { status: 404 });
+  }
   try {
     const { searchParams } = new URL(request.url);
     const isActive = toBoolean(searchParams.get("isActive"));
@@ -76,6 +79,9 @@ export async function GET(request) {
 
 // POST /api/proxy-pools - Create proxy pool
 export async function POST(request) {
+  if (process.env.SAAS_ENABLED === "true") {
+    return NextResponse.json({ error: "not_available_in_saas" }, { status: 404 });
+  }
   try {
     const body = await request.json();
     const normalized = normalizeProxyPoolInput(body);

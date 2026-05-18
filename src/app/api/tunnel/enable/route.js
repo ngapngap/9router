@@ -4,6 +4,9 @@ import { enableTunnel } from "@/lib/tunnel/tunnelManager";
 const DNS_WARMUP_DELAY_MS = 8000;
 
 export async function POST() {
+  if (process.env.SAAS_ENABLED === "true") {
+    return NextResponse.json({ error: "not_available_in_saas" }, { status: 404 });
+  }
   try {
     const result = await enableTunnel();
     // Wait for DNS warmup to propagate at Cloudflare edge after tunnel registered

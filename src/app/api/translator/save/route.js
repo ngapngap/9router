@@ -3,6 +3,9 @@ import fs from "fs";
 import path from "path";
 
 export async function POST(request) {
+  if (process.env.SAAS_ENABLED === "true") {
+    return NextResponse.json({ success: false, error: "not_available_in_saas" }, { status: 404 });
+  }
   try {
     const { file, content } = await request.json();
 

@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 
 export async function POST() {
+  if (process.env.SAAS_ENABLED === "true") {
+    return NextResponse.json({ success: false, message: "not_available_in_saas" }, { status: 404 });
+  }
   if (process.env.NODE_ENV === "production") {
     return NextResponse.json({ success: false, message: "Not allowed in production" }, { status: 403 });
   }

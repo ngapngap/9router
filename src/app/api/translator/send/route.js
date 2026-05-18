@@ -2,6 +2,9 @@ import { getProviderConnections } from "@/lib/localDb.js";
 import { getExecutor, refreshTokenByProvider } from "open-sse/index.js";
 
 export async function POST(request) {
+  if (process.env.SAAS_ENABLED === "true") {
+    return Response.json({ success: false, error: "not_available_in_saas" }, { status: 404 });
+  }
   try {
     const { provider, model, body } = await request.json();
 

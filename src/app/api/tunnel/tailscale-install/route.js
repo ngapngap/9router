@@ -16,6 +16,12 @@ function hasBrew() {
 }
 
 export async function POST(request) {
+  if (process.env.SAAS_ENABLED === "true") {
+    return new Response(JSON.stringify({ error: "not_available_in_saas" }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
   const body = await request.json().catch(() => ({}));
   const platform = os.platform();
   const isWindows = platform === "win32";

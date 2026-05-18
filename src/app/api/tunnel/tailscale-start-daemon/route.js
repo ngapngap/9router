@@ -8,6 +8,9 @@ import { getSettings, updateSettings } from "@/lib/localDb";
 initDbHooks(getSettings, updateSettings);
 
 export async function POST(request) {
+  if (process.env.SAAS_ENABLED === "true") {
+    return NextResponse.json({ error: "not_available_in_saas" }, { status: 404 });
+  }
   try {
     const body = await request.json().catch(() => ({}));
     // Use provided password, or fall back to cached/stored MITM password

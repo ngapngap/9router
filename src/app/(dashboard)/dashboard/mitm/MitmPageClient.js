@@ -13,13 +13,22 @@ export default function MitmPageClient() {
   const [cloudEnabled, setCloudEnabled] = useState(false);
   const [expandedTool, setExpandedTool] = useState(null);
   const [mitmStatus, setMitmStatus] = useState({ running: false, certExists: false, dnsStatus: {}, hasCachedPassword: false });
+  const [saasEnabled, setSaasEnabled] = useState(null);
 
   useEffect(() => {
+    fetch("/api/saas/config")
+      .then((res) => res.json())
+      .then((data) => setSaasEnabled(data.enabled === true))
+      .catch(() => setSaasEnabled(false));
+  }, []);
+
+  useEffect(() => {
+    if (saasEnabled !== false) return;
     fetchConnections();
     fetchApiKeys();
     fetchAliases();
     fetchCloudSettings();
-  }, []);
+  }, [saasEnabled]);
 
   const fetchConnections = async () => {
     try {
@@ -73,6 +82,15 @@ export default function MitmPageClient() {
   };
 
   const mitmTools = Object.entries(MITM_TOOLS);
+
+  if (saasEnabled) {
+    return (
+      <div className="p-6 text-center">
+        <h2 className="text-lg font-semibold text-text-main mb-2">MITM không khả dụng</h2>
+        <p className="text-sm text-text-muted">MITM intercept chạy trên máy cục bộ của bạn (DNS + port 443) và không hoạt động trên server dùng chung.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex w-full flex-col gap-6">

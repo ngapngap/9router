@@ -3,6 +3,9 @@ import fs from "fs";
 import path from "path";
 
 export async function GET(request) {
+  if (process.env.SAAS_ENABLED === "true") {
+    return NextResponse.json({ success: false, error: "not_available_in_saas" }, { status: 404 });
+  }
   try {
     const { searchParams } = new URL(request.url);
     const file = searchParams.get("file");

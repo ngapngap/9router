@@ -28,12 +28,12 @@ const navItems = [
 ];
 
 const debugItems = [
-  { href: "/dashboard/console-log", label: "Console Log", icon: "terminal" },
-  { href: "/dashboard/translator", label: "Translator", icon: "translate" },
+  { href: "/dashboard/console-log", label: "Console Log", icon: "terminal", saasHidden: true },
+  { href: "/dashboard/translator", label: "Translator", icon: "translate", saasHidden: true },
 ];
 
 const systemItems = [
-  { href: "/dashboard/proxy-pools", label: "Proxy Pools", icon: "lan" },
+  { href: "/dashboard/proxy-pools", label: "Proxy Pools", icon: "lan", saasHidden: true },
 ];
 
 export default function Sidebar({ onClose }) {
@@ -257,7 +257,7 @@ export default function Sidebar({ onClose }) {
               </div>
             )}
 
-            {systemItems.map((item) => (
+            {systemItems.filter(item => !item.saasHidden || !saasAccountNav).map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
@@ -282,7 +282,7 @@ export default function Sidebar({ onClose }) {
             ))}
 
             {/* Debug items (inside System section, before Settings) */}
-            {debugItems.map((item) => {
+            {debugItems.filter(item => !item.saasHidden || !saasAccountNav).map((item) => {
               const show = item.href !== "/dashboard/translator" || enableTranslator;
               return show ? (
                 <Link
