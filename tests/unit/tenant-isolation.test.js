@@ -92,4 +92,35 @@ describe("Cross-tenant access attempt — user A cannot access user B data", () 
     expect(() => assertSafeUserId("1'; DROP TABLE users--")).toThrow("invalid_user_id");
     expect(() => assertSafeUserId("1 OR 1=1")).toThrow("invalid_user_id");
   });
+
+  it("getUserDataDir paths are not substrings of each other", () => {
+    const dir10 = getUserDataDir(10);
+    const dir1 = getUserDataDir(1);
+    expect(dir10).not.toContain(dir1.split(/[\\/]/).pop() + "/");
+  });
+
+  it("assertSafeUserId rejects unicode tricks", () => {
+    expect(() => assertSafeUserId("１")).toThrow("invalid_user_id");
+    expect(() => assertSafeUserId("1\u0000")).toThrow("invalid_user_id");
+  });
+});
+
+import { checkRateLimit } from "@/lib/rateLimit.js";
+
+describe("Rate limiter — login brute-force protection", () => {
+  it("allows first 5 requests then blocks", () => {
+    const ip = "10.0.0.1";
+    for (let i = 0; i < 5; i++) {
+      expect(checkRateLimit(ip).allowed).toBe(true);
+    }
+    expect(checkRateLimit(ip).allowed).toBe(false);
+  });
+
+  it("different IPs have separate counters", () => {
+    const ipA = "10.0.0.2";
+    const ipB = "10.0.0.3";
+    for (let i = 0; i < 5; i++) checkRateLimit(ipA);
+    expect(checkRateLimit(ipA).allowed).toBe(false);
+    expect(checkRateLimit(ipB).allowed).toBe(true);
+  });
 });
