@@ -22,9 +22,9 @@ export function computeIsAdmin(userRow) {
   const role = Number(userRow.role);
   if (Number.isFinite(role) && roleVals.includes(role)) return true;
 
-  // Priority 3: SAAS_ADMIN_FALLBACK_USER_ID (opt-in)
-  const fallbackId = process.env.SAAS_ADMIN_FALLBACK_USER_ID?.trim();
-  if (fallbackId && String(userRow.id) === fallbackId) return true;
+  // Priority 3: SAAS_ADMIN_FALLBACK_USER_ID (opt-in only — must be non-empty numeric)
+  const fallbackRaw = process.env.SAAS_ADMIN_FALLBACK_USER_ID?.trim();
+  if (fallbackRaw && /^\d+$/.test(fallbackRaw) && String(userRow.id) === fallbackRaw) return true;
 
   return false;
 }
