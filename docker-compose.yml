@@ -1,0 +1,33 @@
+# 9router SaaS — Docker Compose
+# Usage: docker compose up -d
+#
+# Port 20130 (SaaS fork) — khác 20128 của 9router gốc.
+# Mount volume saas-data vào DATA_DIR (/app/data) để giữ SQLite per-user.
+# Kết nối Postgres New-API qua mạng Tailscale hoặc Docker network.
+
+services:
+  9router-saas:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: 9router-saas
+    restart: unless-stopped
+    ports:
+      - "20130:20130"
+    env_file:
+      - .env
+    volumes:
+      - saas-data:/app/data
+    environment:
+      # Override PORT inside container (Dockerfile default is 20128)
+      - PORT=20130
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:20130/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  saas-data:
+    name: 9router-saas-data
