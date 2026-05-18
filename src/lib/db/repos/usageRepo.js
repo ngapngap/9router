@@ -145,7 +145,7 @@ async function calculateCost(provider, model, tokens) {
 
     return cost;
   } catch (e) {
-    console.error("Error calculating cost:", e);
+    console.error("Error calculating cost:", e?.message || e);
     return 0;
   }
 }
@@ -282,7 +282,7 @@ export async function saveRequestUsage(entry) {
     pushToRing(entry);
     statsEmitter.emit("update");
   } catch (e) {
-    console.error("Failed to save usage stats:", e);
+    console.error("Failed to save usage stats:", e?.message || e);
   }
 }
 

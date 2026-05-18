@@ -83,7 +83,7 @@ async function initAdapterForDataFile(dataFile) {
   const seen = global._dbAdapterPathsLogged;
   if (!seen.has(dataFile)) {
     seen.add(dataFile);
-    console.log(`[DB] Driver: ${adapter.driver} | file: ${dataFile}`);
+    console.log(`[DB] Driver: ${adapter.driver}`);
   }
 
   const { runMigrationOnce } = await import("./migrate.js");

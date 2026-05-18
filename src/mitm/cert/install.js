@@ -223,7 +223,7 @@ async function updateNssDatabases(certPath, action = 'add') {
 
 async function installCertLinux(sudoPassword, certPath) {
   if (!isSudoAvailable()) {
-    log(`🔐 Cert: cannot install to system store without sudo — trust this file on clients: ${certPath}`);
+    log("🔐 Cert: install manually on clients");
     // Still try to update user NSS DBs even if no sudo!
     await updateNssDatabases(certPath, 'add');
     return;
@@ -238,7 +238,7 @@ async function installCertLinux(sudoPassword, certPath) {
   try {
     await execWithPassword(cmd, sudoPassword);
     await updateNssDatabases(certPath, 'add');
-    log(`🔐 Cert: ✅ installed to Linux trust store (${config.dir}) and user browser databases`);
+    log("🔐 Cert: ✅ installed to system trust store");
   } catch (error) {
     throw new Error(`Certificate install failed: ${error.message}`);
   }

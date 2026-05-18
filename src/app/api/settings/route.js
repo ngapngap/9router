@@ -3,6 +3,10 @@ import { getSettings, updateSettings } from "@/lib/localDb";
 import { applyOutboundProxyEnv } from "@/lib/network/outboundProxy";
 import { resetComboRotation } from "open-sse/services/combo.js";
 import bcrypt from "bcryptjs";
+import { getDashboardAuthSession } from "@/lib/auth/dashboardSession";
+import { getUserAccountById } from "@/lib/saas/usersRepo.js";
+import { computeIsAdmin } from "@/lib/saas/adminPolicy.js";
+import { cookies } from "next/headers";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -13,6 +17,22 @@ const SETTINGS_RESPONSE_HEADERS = {
 
 export async function GET() {
   try {
+    if (process.env.SAAS_ENABLED === "true") {
+      const cookieStore = await cookies();
+      const session = await getDashboardAuthSession(cookieStore.get("auth_token")?.value);
+      const isAdmin = session?.saas && session?.sub ?
+        computeIsAdmin(await getUserAccountById(session.sub)) : false;
+
+      if (!isAdmin) {
+        const settings = await getSettings();
+        return NextResponse.json({
+          requireLogin: true,
+          authMode: settings.authMode || "password",
+          oidcConfigured: !!(settings.oidcIssuerUrl && settings.oidcClientId && settings.oidcClientSecret),
+        }, { headers: SETTINGS_RESPONSE_HEADERS });
+      }
+    }
+
     const settings = await getSettings();
     const { password, oidcClientSecret, ...safeSettings } = settings;
     safeSettings.oidcConfigured = !!(safeSettings.oidcIssuerUrl && safeSettings.oidcClientId && oidcClientSecret);
@@ -27,7 +47,7 @@ export async function GET() {
       hasPassword: !!password
     }, { headers: SETTINGS_RESPONSE_HEADERS });
   } catch (error) {
-    console.log("Error getting settings:", error);
+    console.error("Error getting settings:", error?.message || error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
@@ -94,7 +114,7 @@ export async function PATCH(request) {
     safeSettings.oidcConfigured = !!(safeSettings.oidcIssuerUrl && safeSettings.oidcClientId && oidcClientSecret);
     return NextResponse.json(safeSettings, { headers: SETTINGS_RESPONSE_HEADERS });
   } catch (error) {
-    console.log("Error updating settings:", error);
+    console.error("Error updating settings:", error?.message || error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

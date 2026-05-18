@@ -87,7 +87,7 @@ export async function initializeApp() {
     startNetworkMonitor();
     autoStartMitm();
   } catch (error) {
-    console.error("[InitApp] Error:", error);
+    console.error("[InitApp] Error:", error?.message || error);
   }
 }
 

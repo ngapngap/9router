@@ -102,7 +102,7 @@ export async function POST(request) {
 
     return NextResponse.json({ success: true });
   } catch (e) {
-    console.error("[account/import]", e);
+    console.error("[account/import]", e?.message || e);
     return NextResponse.json({ error: "import_failed" }, { status: 500 });
   }
 }

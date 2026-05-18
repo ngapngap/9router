@@ -8,7 +8,7 @@ export async function POST() {
     const result = await startLogin(shortId);
     return NextResponse.json(result);
   } catch (error) {
-    console.error("Tailscale login error:", error);
+    console.error("Tailscale login error:", error?.message || error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

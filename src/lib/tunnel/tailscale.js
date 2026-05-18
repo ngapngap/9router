@@ -717,7 +717,7 @@ export async function startFunnel(port) {
       if (resolved) return;
       resolved = true;
       clearTimeout(timeout);
-      console.log(`[Tailscale] funnel exit code=${code} output="${output.trim().slice(0, 200)}"`);
+      console.log(`[Tailscale] funnel exit code=${code}`);
       const url = parseFunnelUrl() || getTailscaleFunnelUrl(port);
       if (url) resolve({ tunnelUrl: url });
       else reject(new Error(`tailscale funnel failed (code ${code}): ${output.trim()}`));
@@ -745,7 +745,7 @@ export async function provisionCert(hostname) {
       `"${bin}" ${SOCKET_FLAG.join(" ")} cert --cert-file "${certFile}" --key-file "${keyFile}" "${hostname}"`,
       { windowsHide: true, env: { ...process.env, PATH: EXTENDED_PATH }, timeout: 30000 }
     );
-    console.log(`[Tailscale] cert provisioned for ${hostname}`);
+    console.log("[Tailscale] cert provisioned");
   } catch (e) {
     console.warn(`[Tailscale] cert provision failed (non-fatal): ${e.message}`);
   }

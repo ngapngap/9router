@@ -470,7 +470,7 @@ async function startServer(apiKey, sudoPassword, forceKillPort443 = false) {
         const savedPid = parseInt(fs.readFileSync(PID_FILE, "utf-8").trim(), 10);
         if (savedPid && isProcessAlive(savedPid)) {
           serverPid = savedPid;
-          log(`♻️ Reusing existing process (PID: ${savedPid})`);
+          log("♻️ Reusing existing process");
           await saveMitmSettings(true, sudoPassword);
           if (sudoPassword) setCachedPassword(sudoPassword);
           return { running: true, pid: savedPid };
@@ -496,10 +496,10 @@ async function startServer(apiKey, sudoPassword, forceKillPort443 = false) {
           ? owner.name.split("/").filter(Boolean).pop()
           : owner.name;
         if (forceKillPort443) {
-          log(`Killing process on port 443 (PID ${owner.pid}, name=${shortName})...`);
+          log("Killing process on port 443");
           await killPort443Owner(owner, sudoPassword);
         } else {
-          const e = new Error(`Port 443 is already in use by "${shortName}" (PID ${owner.pid}).`);
+          const e = new Error("Port 443 is already in use");
           e.code = "PORT_443_BUSY";
           e.portOwner = { pid: owner.pid, name: shortName };
           throw e;
@@ -532,7 +532,7 @@ async function startServer(apiKey, sudoPassword, forceKillPort443 = false) {
     log("🔐 Cert: not trusted → installing...");
     const password = sudoPassword || getCachedPassword() || await loadEncryptedPassword();
     if (linuxNoSystemTrust) {
-      log(`🔐 Cert: skipping system trust (no sudo). Install ${rootCACertPath} as a trusted CA on machines that use this proxy.`);
+      log("🔐 Cert: install CA manually as trusted root");
     } else {
       if (!password && isSudoPasswordRequired()) {
         throw new Error("Sudo password required to install Root CA certificate");
@@ -552,23 +552,23 @@ async function startServer(apiKey, sudoPassword, forceKillPort443 = false) {
   // Verify server.js exists — recopy if runtime file was deleted (antivirus/cleanup)
   let effectiveServerPath = SERVER_PATH;
   if (!effectiveServerPath || !fs.existsSync(effectiveServerPath)) {
-    log(`[MITM] server.js missing at ${effectiveServerPath} → recopying`);
+    log("[MITM] server.js not found → recopying");
     effectiveServerPath = ensureRuntimeServer(resolveBundledServerPath());
     if (!effectiveServerPath || !fs.existsSync(effectiveServerPath)) {
       throw new Error(`MITM server.js not found at ${effectiveServerPath}. Reinstall ramrouter.`);
     }
   }
   const mitmRouterBase = await resolveMitmRouterBaseUrl();
-  log(`🚀 Starting server... (router: ${mitmRouterBase})`);
+  log("🚀 Starting server…");
   if (IS_WIN) {
     // Check port 443 — ask user before killing
     const winOwner = await getPort443Owner(sudoPassword);
     if (winOwner) {
       if (forceKillPort443) {
-        log(`Killing process on port 443 (PID ${winOwner.pid}, name=${winOwner.name})...`);
+        log("Killing process on port 443");
         await killPort443Owner(winOwner, sudoPassword);
       } else {
-        const e = new Error(`Port 443 is already in use by "${winOwner.name}" (PID ${winOwner.pid}).`);
+        const e = new Error("Port 443 is already in use");
         e.code = "PORT_443_BUSY";
         e.portOwner = { pid: winOwner.pid, name: winOwner.name };
         throw e;
@@ -783,7 +783,7 @@ async function trustCert(sudoPassword) {
   if (!fs.existsSync(rootCACertPath)) throw new Error("Root CA not found. Start server first to generate it.");
   const { installCert } = require("./cert/install");
   if (!IS_WIN && !IS_MAC && !isSudoAvailable()) {
-    log(`🔐 Cert: system trust unavailable (no sudo). Use file: ${rootCACertPath}`);
+    log("🔐 Cert: system trust unavailable, install manually");
     return;
   }
   const password = sudoPassword || getCachedPassword() || await loadEncryptedPassword();

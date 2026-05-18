@@ -33,7 +33,7 @@ export async function createSqlJsAdapter(filePath) {
     saveTimer = setTimeout(() => {
       saveTimer = null;
       if (dirty) {
-        try { persist(); } catch (e) { console.error("[sqljs] save failed:", e); }
+        try { persist(); } catch (e) { console.error("[sqljs] save failed:", e?.message || e); }
       }
     }, SAVE_DEBOUNCE_MS);
   }

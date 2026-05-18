@@ -15,7 +15,7 @@ export async function POST(request) {
     await startDaemonWithPassword(password);
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Tailscale start daemon error:", error);
+    console.error("Tailscale start daemon error:", error?.message || error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

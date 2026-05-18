@@ -33,7 +33,7 @@ export async function GET() {
       usedQuota: row.used_quota != null ? Number(row.used_quota) : null,
     });
   } catch (e) {
-    console.error("[account/me]", e);
+    console.error("[account/me]", e?.message || e);
     return NextResponse.json({ error: "internal_error" }, { status: 500 });
   }
 }

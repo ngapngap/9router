@@ -342,14 +342,14 @@ export async function spawnQuickTunnel(localPort, onUrlUpdate) {
         lastUrl = tunnelUrl;
         clearTimeout(timeout);
         cleanup();
-        console.log(`[Tunnel] cloudflared URL: ${tunnelUrl}`);
+        console.log("[Tunnel] cloudflared URL obtained");
         resolve({ child, tunnelUrl });
         return;
       }
 
       // URL changed after initial connect — notify caller to re-register
       if (tunnelUrl !== lastUrl) {
-        console.log(`[Tunnel] cloudflared URL changed: ${tunnelUrl}`);
+        console.log("[Tunnel] cloudflared URL changed");
         lastUrl = tunnelUrl;
         if (onUrlUpdate) onUrlUpdate(tunnelUrl);
       }

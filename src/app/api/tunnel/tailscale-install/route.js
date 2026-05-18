@@ -46,7 +46,7 @@ export async function POST(request) {
         });
         send("done", { success: true, authUrl: result?.authUrl || null });
       } catch (error) {
-        console.error("Tailscale install error:", error);
+        console.error("Tailscale install error:", error?.message || error);
         const msg = error.message?.includes("incorrect password") || error.message?.includes("Sorry")
           ? "Wrong sudo password"
           : error.message;

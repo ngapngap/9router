@@ -29,7 +29,7 @@ export async function GET() {
 
     return NextResponse.json({ items });
   } catch (e) {
-    console.error("[account/tokens]", e);
+    console.error("[account/tokens]", e?.message || e);
     return NextResponse.json({ error: "internal_error" }, { status: 500 });
   }
 }

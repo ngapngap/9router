@@ -19,7 +19,7 @@ export function getDataDir() {
     return configured;
   } catch (e) {
     if (e?.code === "EACCES" || e?.code === "EPERM") {
-      console.warn(`[DATA_DIR] '${configured}' not writable → fallback ~/.${APP_NAME}`);
+      console.warn("[DATA_DIR] configured path not writable → using fallback");
       return defaultDir();
     }
     throw e;

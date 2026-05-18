@@ -29,7 +29,7 @@ export async function GET() {
       },
     });
   } catch (e) {
-    console.error("[account/export]", e);
+    console.error("[account/export]", e?.message || e);
     return NextResponse.json({ error: "export_failed" }, { status: 500 });
   }
 }

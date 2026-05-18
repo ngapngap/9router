@@ -85,7 +85,7 @@ function throwIfCancelled(token, label) {
 }
 
 export async function enableTunnel(localPort = 20128) {
-  console.log(`[Tunnel] enable start (port=${localPort})`);
+  console.log("[Tunnel] enable start");
   tunnelSvc.cancelToken = { cancelled: false };
   tunnelSvc.activeLocalPort = localPort;
   tunnelSvc.spawnInProgress = true;
@@ -96,7 +96,7 @@ export async function enableTunnel(localPort = 20128) {
       const existing = loadState();
       if (existing?.tunnelUrl && await probeUrlAlive(existing.tunnelUrl)) {
         const publicUrl = `https://r${existing.shortId}.9router.com`;
-        console.log(`[Tunnel] already running, reuse: ${existing.tunnelUrl}`);
+        console.log("[Tunnel] already running, reusing");
         return { success: true, tunnelUrl: existing.tunnelUrl, shortId: existing.shortId, publicUrl, alreadyRunning: true };
       }
     }
@@ -111,21 +111,21 @@ export async function enableTunnel(localPort = 20128) {
 
     const onUrlUpdate = async (url) => {
       if (token.cancelled) return;
-      console.log(`[Tunnel] url updated: ${url}`);
+      console.log("[Tunnel] url updated");
       await registerTunnelUrl(shortId, url);
       saveState({ shortId, machineId, tunnelUrl: url });
       await updateSettings({ tunnelEnabled: true, tunnelUrl: url });
     };
 
     const { tunnelUrl } = await spawnQuickTunnel(localPort, onUrlUpdate);
-    console.log(`[Tunnel] spawned: ${tunnelUrl}`);
+    console.log("[Tunnel] spawned successfully");
     throwIfCancelled(token, "tunnel");
 
     const publicUrl = `https://r${shortId}.9router.com`;
     await registerTunnelUrl(shortId, tunnelUrl);
     saveState({ shortId, machineId, tunnelUrl });
     await updateSettings({ tunnelEnabled: true, tunnelUrl });
-    console.log(`[Tunnel] registered shortId=${shortId} publicUrl=${publicUrl}`);
+    console.log("[Tunnel] registered");
 
     // Verify direct tunnel URL is reachable first (avoid CDN-cache false positive on publicUrl)
     await waitForHealth(tunnelUrl, token);
@@ -190,7 +190,7 @@ export async function getTunnelStatus() {
 // ─── Tailscale Funnel ─────────────────────────────────────────────────────────
 
 export async function enableTailscale(localPort = 20128) {
-  console.log(`[Tailscale] enable start (port=${localPort})`);
+  console.log("[Tailscale] enable start");
   tailscaleSvc.cancelToken = { cancelled: false };
   tailscaleSvc.activeLocalPort = localPort;
   tailscaleSvc.spawnInProgress = true;
@@ -211,7 +211,7 @@ export async function enableTailscale(localPort = 20128) {
     if (!loggedIn) {
       const loginResult = await startLogin(tsHostname);
       if (loginResult.authUrl) {
-        console.log(`[Tailscale] needs login, authUrl=${loginResult.authUrl}`);
+        console.log("[Tailscale] needs login, check dashboard");
         return { success: false, needsLogin: true, authUrl: loginResult.authUrl };
       }
       console.log("[Tailscale] login resolved alreadyLoggedIn");
@@ -236,7 +236,7 @@ export async function enableTailscale(localPort = 20128) {
     throwIfCancelled(token, "tailscale");
 
     if (result.funnelNotEnabled) {
-      console.log(`[Tailscale] funnel not enabled, enableUrl=${result.enableUrl}`);
+      console.log("[Tailscale] funnel needs enable");
       return { success: false, funnelNotEnabled: true, enableUrl: result.enableUrl };
     }
 
@@ -248,7 +248,7 @@ export async function enableTailscale(localPort = 20128) {
     }
 
     await updateSettings({ tailscaleEnabled: true, tailscaleUrl: result.tunnelUrl });
-    console.log(`[Tailscale] funnel up: ${result.tunnelUrl}`);
+    console.log("[Tailscale] funnel up");
 
     // Provision TLS cert so Funnel can serve HTTPS (non-fatal if fails)
     const hostname = new URL(result.tunnelUrl).hostname;

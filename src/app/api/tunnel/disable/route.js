@@ -6,7 +6,7 @@ export async function POST() {
     const result = await disableTunnel();
     return NextResponse.json(result);
   } catch (error) {
-    console.error("Tunnel disable error:", error);
+    console.error("Tunnel disable error:", error?.message || error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

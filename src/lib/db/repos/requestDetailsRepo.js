@@ -116,7 +116,7 @@ async function flushToDatabase() {
       });
     }
   } catch (e) {
-    console.error("[requestDetailsRepo] Batch write failed:", e);
+    console.error("[requestDetailsRepo] Batch write failed:", e?.message || e);
   } finally {
     isFlushing = false;
   }
@@ -132,7 +132,7 @@ export async function saveRequestDetail(detail) {
   // flushToDatabase() drains entire buffer in a loop, so all pushes during await are persisted.
   if (writeBuffer.length >= config.batchSize) {
     if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
-    flushToDatabase().catch((e) => console.error("[requestDetailsRepo] flush err:", e));
+    flushToDatabase().catch((e) => console.error("[requestDetailsRepo] flush err:", e?.message || e));
   } else if (!flushTimer) {
     flushTimer = setTimeout(() => {
       flushTimer = null;

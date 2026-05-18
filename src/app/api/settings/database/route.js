@@ -7,7 +7,7 @@ export async function GET() {
     const payload = await exportDb();
     return NextResponse.json(payload);
   } catch (error) {
-    console.log("Error exporting database:", error);
+    console.error("Error exporting database:", error?.message || error);
     return NextResponse.json({ error: "Failed to export database" }, { status: 500 });
   }
 }
@@ -22,12 +22,12 @@ export async function POST(request) {
       const settings = await getSettings();
       applyOutboundProxyEnv(settings);
     } catch (err) {
-      console.warn("[Settings][DatabaseImport] Failed to re-apply outbound proxy env:", err);
+      console.warn("[Settings][DatabaseImport] Failed to re-apply outbound proxy env:", err?.message || err);
     }
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.log("Error importing database:", error);
+    console.error("Error importing database:", error?.message || error);
     return NextResponse.json(
       { error: error?.message || "Failed to import database" },
       { status: 400 }

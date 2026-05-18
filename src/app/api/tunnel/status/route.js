@@ -8,7 +8,7 @@ export async function GET() {
     const download = getDownloadStatus();
     return NextResponse.json({ tunnel, tailscale, download });
   } catch (error) {
-    console.error("Tunnel status error:", error);
+    console.error("Tunnel status error:", error?.message || error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

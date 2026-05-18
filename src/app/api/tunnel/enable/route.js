@@ -10,7 +10,7 @@ export async function POST() {
     await new Promise((r) => setTimeout(r, DNS_WARMUP_DELAY_MS));
     return NextResponse.json(result);
   } catch (error) {
-    console.error("Tunnel enable error:", error);
+    console.error("Tunnel enable error:", error?.message || error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

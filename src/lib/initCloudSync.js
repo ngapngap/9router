@@ -11,7 +11,7 @@ export async function ensureAppInitialized() {
       await initializeApp();
       g.initialized = true;
     } catch (error) {
-      console.error("[ServerInit] Error initializing app:", error);
+      console.error("[ServerInit] Error initializing app:", error?.message || error);
     } finally {
       g.inProgress = null;
     }

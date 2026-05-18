@@ -141,7 +141,7 @@ export async function resolveConnectionProxyConfig(
   } catch (error) {
     console.error(
       "[resolveConnectionProxyConfig] Failed to resolve proxy config:",
-      error
+      error?.message || error
     );
 
     return {

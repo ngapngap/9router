@@ -23,7 +23,7 @@ export async function initializeCloudSync() {
     ========== END CLOUD SYNC ========== */
     return null;
   } catch (error) {
-    console.error("[CloudSync] Error initializing scheduler:", error);
+    console.error("[CloudSync] Error initializing scheduler:", error?.message || error);
     throw error;
   }
 }

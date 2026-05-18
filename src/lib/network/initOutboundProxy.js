@@ -11,7 +11,7 @@ export async function ensureOutboundProxyInitialized() {
     applyOutboundProxyEnv(settings);
     initialized = true;
   } catch (error) {
-    console.error("[ServerInit] Error initializing outbound proxy:", error);
+    console.error(`[ServerInit] Error initializing outbound proxy: ${error?.message || "unknown"}`);
   }
 
   return initialized;
