@@ -4,10 +4,25 @@ import { useEffect, useState } from "react";
 import { Card, Button } from "@/shared/components";
 import Link from "next/link";
 
+const fmtUsd = (n) =>
+  n == null || !Number.isFinite(Number(n))
+    ? "—"
+    : `$${Number(n).toFixed(4).replace(/\.?0+$/, "")}`;
+
+const fmtDate = (epochSec) => {
+  if (!epochSec) return "—";
+  try {
+    return new Date(Number(epochSec) * 1000).toLocaleString();
+  } catch {
+    return "—";
+  }
+};
+
 export default function AccountPage() {
   const [loading, setLoading] = useState(true);
   const [me, setMe] = useState(null);
   const [tokens, setTokens] = useState([]);
+  const [subs, setSubs] = useState([]);
   const [err, setErr] = useState("");
   const [exporting, setExporting] = useState(false);
 
@@ -16,9 +31,10 @@ export default function AccountPage() {
     async function load() {
       setErr("");
       try {
-        const [meRes, tokRes] = await Promise.all([
+        const [meRes, tokRes, subRes] = await Promise.all([
           fetch("/api/account/me"),
           fetch("/api/account/tokens"),
+          fetch("/api/account/subscriptions"),
         ]);
         if (cancelled) return;
         if (meRes.status === 404) {
@@ -37,6 +53,10 @@ export default function AccountPage() {
         if (tokRes.ok) {
           const t = await tokRes.json();
           setTokens(t.items || []);
+        }
+        if (subRes.ok) {
+          const s = await subRes.json();
+          setSubs(s.items || []);
         }
       } catch (e) {
         if (!cancelled) setErr("Không tải được dữ liệu.");
@@ -135,14 +155,74 @@ export default function AccountPage() {
             <dd>{me?.role ?? "—"}</dd>
           </div>
           <div>
-            <dt className="text-text-muted">Quota</dt>
+            <dt className="text-text-muted">Balance</dt>
             <dd>
-              {me?.usedQuota != null && me?.quota != null
-                ? `${me.usedQuota} / ${me.quota}`
-                : "—"}
+              {me?.balanceUsd != null ? (
+                <span title={`raw quota: ${me.quota ?? "—"}`}>
+                  {fmtUsd(me.balanceUsd)}
+                </span>
+              ) : (
+                "—"
+              )}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-text-muted">Used</dt>
+            <dd>
+              {me?.usedQuotaUsd != null ? (
+                <span title={`raw used_quota: ${me.usedQuota ?? "—"}`}>
+                  {fmtUsd(me.usedQuotaUsd)}
+                </span>
+              ) : (
+                "—"
+              )}
             </dd>
           </div>
         </dl>
+        <p className="text-xs text-text-muted mt-3">
+          Quy đổi: 500,000 quota = $1.
+        </p>
+      </Card>
+
+      <Card>
+        <h2 className="text-base font-medium mb-2">Subscriptions</h2>
+        <p className="text-xs text-text-muted mb-3">
+          Các gói đang active (status=active, end_time &gt; now).
+        </p>
+        {subs.length === 0 ? (
+          <p className="text-sm text-text-muted">Không có gói active.</p>
+        ) : (
+          <div className="overflow-x-auto rounded-lg border border-border">
+            <table className="w-full text-sm">
+              <thead className="bg-surface-muted text-text-muted text-xs">
+                <tr>
+                  <th className="text-left px-3 py-2 font-medium">Plan</th>
+                  <th className="text-right px-3 py-2 font-medium">Daily limit</th>
+                  <th className="text-right px-3 py-2 font-medium">Remaining</th>
+                  <th className="text-right px-3 py-2 font-medium">Used / Total</th>
+                  <th className="text-left px-3 py-2 font-medium">Next reset</th>
+                  <th className="text-left px-3 py-2 font-medium">End</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {subs.map((s) => (
+                  <tr key={s.subId}>
+                    <td className="px-3 py-2 font-medium">{s.title || `#${s.subId}`}</td>
+                    <td className="px-3 py-2 text-right">
+                      {s.dailyRequestLimit != null ? `${s.dailyRequestLimit}/day` : "—"}
+                    </td>
+                    <td className="px-3 py-2 text-right">{fmtUsd(s.dailyQuotaRemainingUsd)}</td>
+                    <td className="px-3 py-2 text-right text-text-muted text-xs">
+                      {fmtUsd(s.amountUsedUsd)} / {fmtUsd(s.amountTotalUsd)}
+                    </td>
+                    <td className="px-3 py-2 text-text-muted text-xs">{fmtDate(s.nextResetTime)}</td>
+                    <td className="px-3 py-2 text-text-muted text-xs">{fmtDate(s.endTime)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Card>
 
       <Card>

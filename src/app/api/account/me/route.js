@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { isSaasDatabaseConfigured } from "@/lib/saas/pgPool.js";
 import { getSaasUserIdFromRequest } from "@/lib/saas/sessionServer.js";
 import { getUserAccountById } from "@/lib/saas/usersRepo.js";
+import { quotaToUsd } from "@/lib/saas/subscriptionsRepo.js";
 
 export async function GET() {
   if (process.env.SAAS_ENABLED !== "true") {
@@ -22,6 +23,9 @@ export async function GET() {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
+    const quota = row.quota != null ? Number(row.quota) : null;
+    const usedQuota = row.used_quota != null ? Number(row.used_quota) : null;
+
     return NextResponse.json({
       id: Number(row.id),
       username: row.username ?? null,
@@ -29,8 +33,10 @@ export async function GET() {
       displayName: row.display_name ?? null,
       role: row.role != null ? Number(row.role) : null,
       status: row.status != null ? Number(row.status) : null,
-      quota: row.quota != null ? Number(row.quota) : null,
-      usedQuota: row.used_quota != null ? Number(row.used_quota) : null,
+      quota,
+      usedQuota,
+      balanceUsd: quota != null ? quotaToUsd(quota) : null,
+      usedQuotaUsd: usedQuota != null ? quotaToUsd(usedQuota) : null,
     });
   } catch (e) {
     console.error("[account/me]", e?.message || e);
