@@ -5,6 +5,7 @@ import { getSaasUserIdFromRequest } from "@/lib/saas/sessionServer.js";
 import { getUserAccountById, listUsersAdmin, countUsersAdmin } from "@/lib/saas/usersRepo.js";
 import { computeIsAdmin } from "@/lib/saas/adminPolicy.js";
 import { getUserDataDir } from "@/lib/saas/userDataRoot.js";
+import { writeAuditLog } from "@/lib/saas/auditLog.js";
 
 /**
  * GET /api/admin/overview — chỉ admin SaaS; tổng quan user + kích thước store SQLite.
@@ -23,6 +24,8 @@ export async function GET(request) {
   if (!me || !computeIsAdmin(me)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+
+  writeAuditLog({ action: "admin_overview", userId: uid, detail: `q=${q} limit=${limit}` });
 
   const { searchParams } = new URL(request.url);
   const afterId = Number(searchParams.get("afterId") || "0") || 0;
