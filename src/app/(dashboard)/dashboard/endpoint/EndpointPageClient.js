@@ -99,6 +99,7 @@ export default function APIPageClient({ machineId }) {
 
   // API key visibility toggle state
   const [visibleKeys, setVisibleKeys] = useState(new Set());
+  const [saasEnabled, setSaasEnabled] = useState(false);
 
   const { copied, copy } = useCopyToClipboard();
 
@@ -110,7 +111,10 @@ export default function APIPageClient({ machineId }) {
   useEffect(() => {
     fetchData();
     loadSettings();
-    // Poll status periodically + on tab visible to sync after watchdog restarts
+    fetch("/api/saas/config")
+      .then(r => r.json())
+      .then(d => setSaasEnabled(!!d.enabled))
+      .catch(() => {});
     const interval = setInterval(() => { syncTunnelStatus(); }, STATUS_POLL_INTERVAL_MS);
     const onVisible = () => { if (!document.hidden) syncTunnelStatus(); };
     document.addEventListener("visibilitychange", onVisible);
@@ -746,7 +750,7 @@ export default function APIPageClient({ machineId }) {
             copied={copied}
             onCopy={copy}
           />
-          {/* Cloudflare Tunnel */}
+          {!saasEnabled && (
           <div className="flex items-center gap-2">
             <span className={`text-xs font-mono px-1.5 py-0.5 rounded shrink-0 min-w-[88px] text-center ${
               tunnelEnabled ? "bg-primary/10 text-primary" : "bg-surface-2 text-text-muted"
@@ -834,7 +838,8 @@ export default function APIPageClient({ machineId }) {
               </Button>
             )}
           </div>
-          {/* Tailscale */}
+          )}
+          {!saasEnabled && (
           <div className="flex items-center gap-2">
             <span className={`text-xs font-mono px-1.5 py-0.5 rounded shrink-0 min-w-[88px] text-center ${
               tsEnabled ? "bg-primary/10 text-primary" : "bg-surface-2 text-text-muted"
@@ -912,10 +917,10 @@ export default function APIPageClient({ machineId }) {
               </Button>
             )}
           </div>
+          )}
         </div>
 
-        {/* Security warnings when tunnel or tailscale is active */}
-        {(tunnelEnabled || tsEnabled) && (
+        {!saasEnabled && (tunnelEnabled || tsEnabled) && (
           <div className="mt-4 flex flex-col gap-2">
             {!requireApiKey && (
               <SecurityWarning
@@ -939,8 +944,7 @@ export default function APIPageClient({ machineId }) {
           </div>
         )}
 
-        {/* Tunnel dashboard access option */}
-        {(tunnelEnabled || tsEnabled) && (
+        {!saasEnabled && (tunnelEnabled || tsEnabled) && (
           <div className="mt-4 pt-4 border-t border-border flex items-center gap-3">
             <Toggle
               checked={tunnelDashboardAccess}

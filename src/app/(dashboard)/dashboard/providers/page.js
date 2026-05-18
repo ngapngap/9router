@@ -361,7 +361,19 @@ export default function ProvidersPage() {
                     await navigator.clipboard.writeText(saasCfg.ramcloudsBaseUrl);
                     notify.success("Copied base URL");
                   } catch {
-                    notify.error("Could not copy");
+                    try {
+                      const ta = document.createElement("textarea");
+                      ta.value = saasCfg.ramcloudsBaseUrl;
+                      ta.style.position = "fixed";
+                      ta.style.opacity = "0";
+                      document.body.appendChild(ta);
+                      ta.select();
+                      document.execCommand("copy");
+                      document.body.removeChild(ta);
+                      notify.success("Copied base URL");
+                    } catch {
+                      notify.error("Could not copy — copy thủ công từ text bên trên");
+                    }
                   }
                 }}
               >

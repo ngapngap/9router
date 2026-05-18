@@ -149,7 +149,7 @@ export default function Sidebar({ onClose }) {
               <span className="text-xs text-text-muted">v{APP_CONFIG.version}</span>
             </div>
           </Link>
-          {updateInfo && (
+          {!saasAccountNav && updateInfo && (
             <div className="flex flex-col gap-1.5 rounded p-1 -m-1">
               <span className="text-xs font-semibold text-green-600 dark:text-amber-500">
                 ↑ New version available: v{updateInfo.latestVersion}
@@ -359,16 +359,17 @@ export default function Sidebar({ onClose }) {
 
         {/* Footer section */}
         <div className="p-3 border-t border-border-subtle">
-          {/* Shutdown button */}
-          <Button
-            variant="outline"
-            fullWidth
-            icon="power_settings_new"
-            onClick={() => setShowShutdownModal(true)}
-            className="text-red-500 border-red-200 hover:bg-red-50 hover:border-red-300"
-          >
-            Shutdown
-          </Button>
+          {!saasAccountNav && (
+            <Button
+              variant="outline"
+              fullWidth
+              icon="power_settings_new"
+              onClick={() => setShowShutdownModal(true)}
+              className="text-red-500 border-red-200 hover:bg-red-50 hover:border-red-300"
+            >
+              Shutdown
+            </Button>
+          )}
         </div>
       </aside>
 
@@ -385,17 +386,18 @@ export default function Sidebar({ onClose }) {
         loading={isShuttingDown}
       />
 
-      {/* Update Confirmation Modal */}
-      <ConfirmModal
-        isOpen={showUpdateModal}
-        onClose={() => setShowUpdateModal(false)}
-        onConfirm={handleUpdate}
-        title="Update 9Router"
-        message={`Show install command for v${updateInfo?.latestVersion || ""}? You can copy it and shutdown to install manually.`}
-        confirmText="Show Command"
-        cancelText="Cancel"
-        variant="primary"
-      />
+      {!saasAccountNav && (
+        <ConfirmModal
+          isOpen={showUpdateModal}
+          onClose={() => setShowUpdateModal(false)}
+          onConfirm={handleUpdate}
+          title="Update 9Router"
+          message={`Show install command for v${updateInfo?.latestVersion || ""}? You can copy it and shutdown to install manually.`}
+          confirmText="Show Command"
+          cancelText="Cancel"
+          variant="primary"
+        />
+      )}
 
       {/* Disconnected / Updating Overlay */}
       {(isDisconnected || isUpdating) && (
