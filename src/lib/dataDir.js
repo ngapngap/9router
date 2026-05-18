@@ -13,14 +13,20 @@ function defaultDir() {
 
 export function getDataDir() {
   const configured = process.env.DATA_DIR;
-  if (!configured) return defaultDir();
+  if (!configured) {
+    const dir = defaultDir();
+    console.log(`[DATA_DIR] using default → ${dir}`);
+    return dir;
+  }
   try {
     fs.mkdirSync(configured, { recursive: true });
+    console.log(`[DATA_DIR] using configured → ${configured}`);
     return configured;
   } catch (e) {
     if (e?.code === "EACCES" || e?.code === "EPERM") {
-      console.warn("[DATA_DIR] configured path not writable → using fallback");
-      return defaultDir();
+      const fallback = defaultDir();
+      console.warn(`[DATA_DIR] configured "${configured}" not writable (${e.code}) → fallback ${fallback}`);
+      return fallback;
     }
     throw e;
   }
