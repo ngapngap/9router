@@ -4,7 +4,6 @@ import { getSaasUserIdFromRequest } from "@/lib/saas/sessionServer.js";
 import {
   listActiveSubscriptionsByUserId,
   quotaToUsd,
-  dailyLimitForTitle,
 } from "@/lib/saas/subscriptionsRepo.js";
 
 export const dynamic = "force-dynamic";
@@ -38,8 +37,7 @@ export async function GET() {
         amountUsed,
         amountTotalUsd: quotaToUsd(amountTotal),
         amountUsedUsd: quotaToUsd(amountUsed),
-        dailyQuotaRemainingUsd: quotaToUsd(remaining),
-        dailyRequestLimit: dailyLimitForTitle(r.title),
+        remainingUsd: quotaToUsd(remaining),
       };
     });
     return NextResponse.json({ items });

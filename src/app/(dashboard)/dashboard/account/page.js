@@ -194,7 +194,6 @@ export default function AccountPage() {
               <thead className="bg-surface-muted text-text-muted text-xs">
                 <tr>
                   <th className="text-left px-3 py-2 font-medium">Plan</th>
-                  <th className="text-right px-3 py-2 font-medium">Daily limit</th>
                   <th className="text-right px-3 py-2 font-medium">Remaining</th>
                   <th className="text-right px-3 py-2 font-medium">Used / Total</th>
                   <th className="text-left px-3 py-2 font-medium">Next reset</th>
@@ -205,10 +204,7 @@ export default function AccountPage() {
                 {subs.map((s) => (
                   <tr key={s.subId}>
                     <td className="px-3 py-2 font-medium">{s.title || `#${s.subId}`}</td>
-                    <td className="px-3 py-2 text-right">
-                      {s.dailyRequestLimit != null ? `${s.dailyRequestLimit}/day` : "—"}
-                    </td>
-                    <td className="px-3 py-2 text-right">{fmtUsd(s.dailyQuotaRemainingUsd)}</td>
+                    <td className="px-3 py-2 text-right">{fmtUsd(s.remainingUsd)}</td>
                     <td className="px-3 py-2 text-right text-text-muted text-xs">
                       {fmtUsd(s.amountUsedUsd)} / {fmtUsd(s.amountTotalUsd)}
                     </td>
