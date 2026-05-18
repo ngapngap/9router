@@ -71,17 +71,32 @@ export async function validateApiKey(key) {
   const k = typeof key === "string" ? key.trim() : "";
   if (!k) return false;
 
+  // [DEBUG-401] log path + masked key + length
+  const masked = k.length > 12 ? `${k.slice(0, 6)}…${k.slice(-4)}` : "(short)";
+  const trimmedDiff = (typeof key === "string" && key.length !== k.length) ? ` (raw had ${key.length - k.length} extra char(s))` : "";
+
   if (process.env.SAAS_ENABLED === "true") {
+    console.log(`[DEBUG-401] validateApiKey SAAS path | key=${masked} len=${k.length}${trimmedDiff}`);
     const { findTokenByKeyForProxy } = await import("@/lib/saas/tokensRepo.js");
     const { setTenantUserId } = await import("@/lib/saas/tenantContext.js");
     const row = await findTokenByKeyForProxy(k);
-    if (!row?.user_id) return false;
+    if (!row?.user_id) {
+      console.warn(`[DEBUG-401] validateApiKey SAAS: not found in public.tokens (key=${masked})`);
+      return false;
+    }
     setTenantUserId(Number(row.user_id));
     return true;
   }
 
   const db = await getAdapter();
   const row = db.get(`SELECT isActive FROM apiKeys WHERE key = ?`, [k]);
-  if (!row) return false;
-  return row.isActive === 1 || row.isActive === true;
+  if (!row) {
+    console.warn(`[DEBUG-401] validateApiKey SQLite: no row for key=${masked} len=${k.length}${trimmedDiff}`);
+    return false;
+  }
+  const active = row.isActive === 1 || row.isActive === true;
+  if (!active) {
+    console.warn(`[DEBUG-401] validateApiKey SQLite: row exists but isActive=${row.isActive} for key=${masked}`);
+  }
+  return active;
 }

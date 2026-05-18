@@ -28,13 +28,20 @@ export async function loadSettingsAfterV1Auth(request, deps) {
   } = deps;
   const apiKey = extractApiKey(request);
 
-  if (process.env.SAAS_ENABLED === "true") {
+  // [DEBUG-401] mode + key presence
+  const saasOn = process.env.SAAS_ENABLED === "true";
+  const masked = apiKey ? (apiKey.length > 12 ? `${apiKey.slice(0, 6)}…${apiKey.slice(-4)}` : "(short)") : "(none)";
+  console.log(`[DEBUG-401] loadSettingsAfterV1Auth | SAAS_ENABLED=${saasOn} | apiKey=${masked} | len=${apiKey?.length || 0}`);
+
+  if (saasOn) {
     if (!apiKey) {
+      console.warn(`[DEBUG-401] SAAS branch: missing API key`);
       log.warn(tag, "Missing API key (SaaS)");
       return { error: errorResponse(HTTP_STATUS.UNAUTHORIZED, "Missing API key") };
     }
     const valid = await isValidApiKey(apiKey);
     if (!valid) {
+      console.warn(`[DEBUG-401] SAAS branch: isValidApiKey=false for ${masked}`);
       log.warn(tag, "Invalid API key (SaaS)");
       return { error: errorResponse(HTTP_STATUS.UNAUTHORIZED, "Invalid API key") };
     }
@@ -42,13 +49,16 @@ export async function loadSettingsAfterV1Auth(request, deps) {
 
   const settings = await getSettings();
 
-  if (process.env.SAAS_ENABLED !== "true" && settings.requireApiKey) {
+  if (!saasOn && settings.requireApiKey) {
+    console.log(`[DEBUG-401] local + requireApiKey=true branch active`);
     if (!apiKey) {
+      console.warn(`[DEBUG-401] local: missing API key`);
       log.warn(tag, "Missing API key (requireApiKey=true)");
       return { error: errorResponse(HTTP_STATUS.UNAUTHORIZED, "Missing API key") };
     }
     const valid = await isValidApiKey(apiKey);
     if (!valid) {
+      console.warn(`[DEBUG-401] local: isValidApiKey=false for ${masked}`);
       log.warn(tag, "Invalid API key (requireApiKey=true)");
       return { error: errorResponse(HTTP_STATUS.UNAUTHORIZED, "Invalid API key") };
     }

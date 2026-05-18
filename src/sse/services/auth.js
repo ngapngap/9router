@@ -286,12 +286,22 @@ export function extractApiKey(request) {
   // Check Authorization header first
   const authHeader = request.headers.get("Authorization");
   if (authHeader?.startsWith("Bearer ")) {
-    return authHeader.slice(7);
+    const raw = authHeader.slice(7);
+    // [DEBUG-401] surface hidden whitespace/CR/LF in client header
+    if (raw && (raw !== raw.trim() || /[\r\n\t ]/.test(raw))) {
+      const head = raw.slice(0, 4).split("").map(c => c.charCodeAt(0)).join(",");
+      const tail = raw.slice(-4).split("").map(c => c.charCodeAt(0)).join(",");
+      log.warn("DEBUG-401", `extractApiKey: header has whitespace. len=${raw.length} headCodes=[${head}] tailCodes=[${tail}]`);
+    }
+    return raw;
   }
 
   // Check Anthropic x-api-key header
   const xApiKey = request.headers.get("x-api-key");
   if (xApiKey) {
+    if (xApiKey !== xApiKey.trim() || /[\r\n\t]/.test(xApiKey)) {
+      log.warn("DEBUG-401", `extractApiKey: x-api-key has whitespace. len=${xApiKey.length}`);
+    }
     return xApiKey;
   }
 
