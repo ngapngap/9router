@@ -1,5 +1,8 @@
 # 9router SaaS — Docker Compose
-# Usage: docker compose up -d
+# Usage: docker compose pull && docker compose up -d
+#
+# Image build trên GitHub Actions (docker-publish.yml) → ghcr.io.
+# VPS chỉ cần pull image + file này + .env — không cần source code hay Node.js.
 #
 # Port 20130 (SaaS fork) — khác 20128 của 9router gốc.
 # Mount volume saas-data vào DATA_DIR (/app/data) để giữ SQLite per-user.
@@ -7,9 +10,7 @@
 
 services:
   9router-saas:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/ngapngap/9router:latest
     container_name: 9router-saas
     restart: unless-stopped
     ports:
@@ -19,7 +20,6 @@ services:
     volumes:
       - saas-data:/app/data
     environment:
-      # Override PORT inside container (Dockerfile default is 20128)
       - PORT=20130
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:20130/api/health"]
