@@ -3,6 +3,7 @@
  * @returns {boolean}
  */
 export function computeIsAdmin(userRow) {
+  // Priority 1: SAAS_ADMIN_USER_IDS (DESIGN §6.1)
   const raw = process.env.SAAS_ADMIN_USER_IDS;
   if (raw?.trim()) {
     const allow = raw
@@ -13,7 +14,17 @@ export function computeIsAdmin(userRow) {
     if (allow.includes(idStr)) return true;
   }
 
+  // Priority 2: SAAS_ADMIN_ROLE_VALUES (CSV, default "10,100")
+  const roleVals = (process.env.SAAS_ADMIN_ROLE_VALUES || "10,100")
+    .split(",")
+    .map((s) => Number(s.trim()))
+    .filter(Number.isFinite);
   const role = Number(userRow.role);
-  if (Number.isNaN(role)) return false;
-  return role === 10 || role === 100;
+  if (Number.isFinite(role) && roleVals.includes(role)) return true;
+
+  // Priority 3: SAAS_ADMIN_FALLBACK_USER_ID (opt-in)
+  const fallbackId = process.env.SAAS_ADMIN_FALLBACK_USER_ID?.trim();
+  if (fallbackId && String(userRow.id) === fallbackId) return true;
+
+  return false;
 }
