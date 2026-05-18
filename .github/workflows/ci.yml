@@ -30,3 +30,23 @@ jobs:
         env:
           SAAS_ENABLED: "false"
         run: npm run build
+
+  build-saas:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install
+        run: npm install --no-audit --no-fund
+
+      - name: Next build (SAAS_ENABLED=true, mock PG)
+        env:
+          SAAS_ENABLED: "true"
+          SAAS_DATABASE_URL: "postgresql://mock:mock@localhost:5432/mock"
+          JWT_SECRET: "ci-test-secret-not-for-prod"
+        run: npm run build
