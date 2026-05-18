@@ -39,17 +39,27 @@ export async function getUserAccountById(userId) {
 
 /**
  * Admin: danh sách user (phân trang keyset theo id).
- * @param {{ limit?: number, afterId?: number }} opts
+ * @param {{ limit?: number, afterId?: number, q?: string }} opts
  */
-export async function listUsersAdmin({ limit = 50, afterId = 0 } = {}) {
+export async function listUsersAdmin({ limit = 50, afterId = 0, q = "" } = {}) {
   const lim = Math.min(Math.max(Number(limit) || 50, 1), 100);
+  const whereParts = ["deleted_at IS NULL", "id > $1"];
+  const params = [afterId];
+  let paramIdx = 2;
+  if (q) {
+    whereParts.push(`(lower(email) LIKE lower($${paramIdx}) OR lower(username) LIKE lower($${paramIdx}) OR id::text = $${paramIdx})`);
+    params.push(`%${q}%`);
+    paramIdx++;
+  }
+  const whereClause = whereParts.join(" AND ");
+  params.push(lim + 1);
   const res = await saasQuery(
     `SELECT id, username, email, display_name, role, status, quota, used_quota, request_count
      FROM public.users
-     WHERE deleted_at IS NULL AND id > $1
+     WHERE ${whereClause}
      ORDER BY id ASC
-     LIMIT $2`,
-    [afterId, lim + 1],
+     LIMIT $${paramIdx}`,
+    params,
   );
   const rows = res.rows;
   const hasMore = rows.length > lim;

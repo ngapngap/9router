@@ -27,17 +27,30 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const afterId = Number(searchParams.get("afterId") || "0") || 0;
   const limit = Number(searchParams.get("limit") || "50") || 50;
+  const q = (searchParams.get("q") || "").trim();
 
-  const { users, hasMore, nextCursor } = await listUsersAdmin({ afterId, limit });
+  const { users, hasMore, nextCursor } = await listUsersAdmin({ afterId, limit, q });
+
+  let totalUsersListed = users.length;
+  let withStore = 0;
+  let totalStoreBytes = 0;
 
   const usersOut = [];
   for (const u of users) {
     const dir = getUserDataDir(u.id);
     const sqlitePath = path.join(dir, "data.sqlite");
     let storeBytes = 0;
+    let storeMtime = null;
+    let hasLocalRouterStore = false;
     try {
       const st = await fs.stat(sqlitePath);
-      if (st.isFile()) storeBytes = st.size;
+      if (st.isFile()) {
+        storeBytes = st.size;
+        storeMtime = st.mtime.toISOString();
+        hasLocalRouterStore = true;
+        withStore++;
+        totalStoreBytes += storeBytes;
+      }
     } catch {
       storeBytes = 0;
     }
@@ -51,7 +64,9 @@ export async function GET(request) {
       quota: u.quota,
       used_quota: u.used_quota,
       request_count: u.request_count,
+      hasLocalRouterStore,
       storeBytes,
+      storeMtime,
     });
   }
 
@@ -59,5 +74,6 @@ export async function GET(request) {
     users: usersOut,
     hasMore,
     nextCursor,
+    stats: { totalUsersListed, withStore, totalStoreBytes },
   });
 }
