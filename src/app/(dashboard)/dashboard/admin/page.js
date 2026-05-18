@@ -12,6 +12,7 @@ function formatBytes(n) {
 
 const PAGE_SIZES = [25, 50, 100];
 const STATUS_MAP = { 1: "Enabled", 2: "Disabled" };
+const ROLE_MAP = { 0: "Guest", 1: "User", 10: "Admin", 100: "Root" };
 
 export default function AdminOverviewPage() {
   const [loading, setLoading] = useState(true);
@@ -158,6 +159,7 @@ export default function AdminOverviewPage() {
               <tr>
                 <th className="py-2 pr-4">ID</th>
                 <th className="py-2 pr-4">Định danh</th>
+                <th className="py-2 pr-4">Vai trò</th>
                 <th className="py-2 pr-4">Trạng thái</th>
                 <th className="py-2 pr-4">Store</th>
                 <th className="py-2 pr-4">Dung lượng</th>
@@ -170,6 +172,13 @@ export default function AdminOverviewPage() {
                   <td className="py-2 pr-4 font-mono">{u.id}</td>
                   <td className="py-2 pr-4">{u.email || u.username || "—"}</td>
                   <td className="py-2 pr-4">
+                    {u.role != null ? (
+                      <span className={u.role >= 10 ? "text-amber-400" : "text-zinc-400"}>
+                        {ROLE_MAP[u.role] || u.role}
+                      </span>
+                    ) : "—"}
+                  </td>
+                  <td className="py-2 pr-4">
                     {u.status != null ? (
                       <span className={u.status === 1 ? "text-emerald-400" : "text-red-400"}>
                         {STATUS_MAP[u.status] || u.status}
@@ -178,7 +187,7 @@ export default function AdminOverviewPage() {
                   </td>
                   <td className="py-2 pr-4">{u.hasLocalRouterStore ? "✓ Có" : "✗ Chưa"}</td>
                   <td className="py-2 pr-4">{formatBytes(u.storeBytes)}</td>
-                  <td className="py-2">{u.storeMtime ? new Date(u.storeMtime).toLocaleDateString() : "—"}</td>
+                  <td className="py-2">{u.storeMtime ? new Date(u.storeMtime).toLocaleString() : "—"}</td>
                 </tr>
               ))}
             </tbody>

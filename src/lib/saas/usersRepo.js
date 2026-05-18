@@ -67,3 +67,20 @@ export async function listUsersAdmin({ limit = 50, afterId = 0, q = "" } = {}) {
   const nextCursor = hasMore ? data[data.length - 1]?.id : null;
   return { users: data, hasMore, nextCursor };
 }
+
+export async function countUsersAdmin(q = "") {
+  const whereParts = ["deleted_at IS NULL"];
+  const params = [];
+  let paramIdx = 1;
+  if (q) {
+    whereParts.push(`(lower(email) LIKE lower($${paramIdx}) OR lower(username) LIKE lower($${paramIdx}) OR id::text = $${paramIdx})`);
+    params.push(`%${q}%`);
+    paramIdx++;
+  }
+  const whereClause = whereParts.join(" AND ");
+  const res = await saasQuery(
+    `SELECT COUNT(*)::int AS cnt FROM public.users WHERE ${whereClause}`,
+    params,
+  );
+  return res.rows[0]?.cnt ?? 0;
+}

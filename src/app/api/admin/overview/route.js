@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { getSaasUserIdFromRequest } from "@/lib/saas/sessionServer.js";
-import { getUserAccountById, listUsersAdmin } from "@/lib/saas/usersRepo.js";
+import { getUserAccountById, listUsersAdmin, countUsersAdmin } from "@/lib/saas/usersRepo.js";
 import { computeIsAdmin } from "@/lib/saas/adminPolicy.js";
 import { getUserDataDir } from "@/lib/saas/userDataRoot.js";
 
@@ -30,6 +30,8 @@ export async function GET(request) {
   const q = (searchParams.get("q") || "").trim();
 
   const { users, hasMore, nextCursor } = await listUsersAdmin({ afterId, limit, q });
+
+  const totalUsersInDb = await countUsersAdmin(q);
 
   let totalUsersListed = users.length;
   let withStore = 0;
@@ -74,6 +76,6 @@ export async function GET(request) {
     users: usersOut,
     hasMore,
     nextCursor,
-    stats: { totalUsersListed, withStore, totalStoreBytes },
+    stats: { totalUsersListed, withStore, totalStoreBytes, totalUsersInDb },
   });
 }
