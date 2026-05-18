@@ -7,7 +7,7 @@ import Link from "next/link";
 const fmtUsd = (n) =>
   n == null || !Number.isFinite(Number(n))
     ? "—"
-    : `$${Number(n).toFixed(4).replace(/\.?0+$/, "")}`;
+    : `$${Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const fmtDate = (epochSec) => {
   if (!epochSec) return "—";
@@ -179,9 +179,6 @@ export default function AccountPage() {
             </dd>
           </div>
         </dl>
-        <p className="text-xs text-text-muted mt-3">
-          Quy đổi: 500,000 quota = $1.
-        </p>
       </Card>
 
       <Card>
