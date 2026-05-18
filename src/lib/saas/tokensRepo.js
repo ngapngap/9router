@@ -27,7 +27,7 @@ export async function findTokenByKeyForProxy(rawKey) {
  */
 export async function listTokensByUserId(userId) {
   const res = await saasQuery(
-    `SELECT id, name, key, status, created_time, expired_time
+    `SELECT id, name, TRIM(key::text) AS key, status, created_time, expired_time
      FROM public.tokens
      WHERE user_id = $1 AND deleted_at IS NULL
      ORDER BY id DESC`,
