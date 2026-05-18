@@ -30,6 +30,12 @@ export async function POST(request) {
     return NextResponse.json({ error: "Invalid database payload" }, { status: 400 });
   }
 
+  const raw = JSON.stringify(payload);
+  const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
+  if (raw.length > MAX_IMPORT_BYTES) {
+    return NextResponse.json({ error: "Payload too large (max 5 MB)" }, { status: 413 });
+  }
+
   try {
     const adapter = await getAdapterForUser(userId);
     const { stringifyJson } = await import("@/lib/db/helpers/jsonCol.js");
