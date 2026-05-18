@@ -566,6 +566,7 @@ export default function ProfilePage() {
                 <p className="text-xs sm:text-sm text-text-muted font-mono break-all">~/.ramrouter/db/data.sqlite</p>
               </div>
             </div>
+          </div>
         </Card>
 
         {/* Security */}
