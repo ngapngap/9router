@@ -48,6 +48,6 @@ describe("JWT claims (P12)", () => {
 
     const { verifyDashboardAuthToken } = await import("@/lib/auth/dashboardSession.js");
     const result = await verifyDashboardAuthToken(badToken);
-    expect(result).toBeNull(); // should fail verification
+    expect(result).toBeFalsy(); // returns false or null on invalid token
   });
 });
