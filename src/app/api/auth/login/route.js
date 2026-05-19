@@ -79,7 +79,7 @@ export async function POST(request) {
 
   if (process.env.SAAS_ENABLED === "true") {
     const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "unknown";
-    const rl = checkRateLimit(ip);
+    const rl = checkRateLimit({ ip, route: "/api/auth/login" });
     if (!rl.allowed) {
       return NextResponse.json({ error: "Too many requests" }, { status: 429, headers: { "Retry-After": String(Math.ceil((rl.resetMs - Date.now()) / 1000)) } });
     }
