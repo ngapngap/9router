@@ -58,7 +58,11 @@ const EXEMPT = [
 
 // OK whitelist (đã verify keyed by userId hoặc credential hash)
 const OK = [
-  // sẽ điền sau khi sub-wave E refactor xong
+  {
+    file: /src\/lib\/db\/repos\/usageRepo\.js$/,
+    cache: /^(pendingRequestsByUser|lastErrorProviderByUser|pendingTimersByUser|recentRingByUser|connectionMapCacheByUser)$/,
+    reason: "P09 sub-wave C — Map<userId, State>, resolve qua _resolveUserId() (ALS hoặc opts.userId)",
+  },
 ];
 
 const PATTERN = /^(?:export\s+)?(?:const|let|var)\s+(\w+)\s*=\s*new\s+(Map|Set|WeakMap|LRUCache)\b/;
