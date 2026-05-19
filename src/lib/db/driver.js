@@ -120,9 +120,27 @@ export async function getAdapterForUser(userId) {
   return slot.initPromise;
 }
 
+/**
+ * Lấy DB adapter cho request hiện tại.
+ *
+ * SaaS mode (SAAS_ENABLED=true):
+ *   1. Có tenant userId trong ALS → dùng adapter của user đó.
+ *   2. Có Bearer token request → resolve user → dùng adapter của user đó.
+ *   3. Đang trong runAsSystem block (isSystemContext()) → fallback default adapter
+ *      (cron, startup migration, OAuth refresh nền — không thuộc về user nào).
+ *   4. KHÔNG match cả 3 trên → throw để chặn silent leak cross-tenant.
+ *      Ref P09 (#21): src/lib/saas/tenantContext.js#runAsSystem
+ *
+ * Self-host mode (SAAS_ENABLED!=="true"):
+ *   - Luôn return default adapter (1 SQLite file).
+ *
+ * @returns {Promise<any>} DB adapter
+ * @throws {Error} Trong SaaS mode khi không có tenant context và không phải system call.
+ */
 export async function getAdapter() {
   if (process.env.SAAS_ENABLED === "true") {
-    const { getTenantUserId } = await import("@/lib/saas/tenantContext.js");
+    // Pull cả getTenantUserId và isSystemContext từ cùng 1 module để giảm round-trip.
+    const { getTenantUserId, isSystemContext } = await import("@/lib/saas/tenantContext.js");
     const tid = getTenantUserId();
     if (tid != null) {
       return getAdapterForUser(tid);
@@ -132,8 +150,16 @@ export async function getAdapter() {
     if (sid != null) {
       return getAdapterForUser(sid);
     }
+    // P09 (#21): chỉ cho phép fallback default adapter khi đang trong runAsSystem block.
+    // Nếu không có tenant + không phải system → throw để chặn silent leak default DB.
+    if (!isSystemContext()) {
+      throw new Error(
+        "[DB] missing tenant context: getAdapter() called outside runWithTenant/runAsSystem in SAAS_ENABLED mode"
+      );
+    }
   }
 
+  // Self-host hoặc system context → fallback default adapter
   if (state.instance) return state.instance;
   if (!state.initPromise) {
     state.initPromise = initDefaultAdapter().then((a) => {

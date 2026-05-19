@@ -1,4 +1,7 @@
 import initializeApp from "@/shared/services/initializeApp";
+// P09 (#21): startup hook không thuộc về user nào → bọc runAsSystem để
+// getAdapter() được phép fallback default adapter (xem src/lib/db/driver.js).
+import { runAsSystem } from "@/lib/saas/tenantContext.js";
 
 // Survive Next.js HMR — module-level flag resets on reload, globalThis persists
 const g = globalThis.__cloudSyncInit ??= { initialized: false, inProgress: null };
@@ -6,7 +9,8 @@ const g = globalThis.__cloudSyncInit ??= { initialized: false, inProgress: null 
 export async function ensureAppInitialized() {
   if (g.initialized) return true;
   if (g.inProgress) return g.inProgress;
-  g.inProgress = (async () => {
+  // P09 (#21): toàn bộ initializeApp() chạy trong system context — không tenant.
+  g.inProgress = runAsSystem(async () => {
     try {
       await initializeApp();
       g.initialized = true;
@@ -16,7 +20,7 @@ export async function ensureAppInitialized() {
       g.inProgress = null;
     }
     return g.initialized;
-  })();
+  });
   return g.inProgress;
 }
 

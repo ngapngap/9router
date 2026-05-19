@@ -8,6 +8,9 @@
  */
 
 import { CLOUD_CODE_API, LOAD_CODE_ASSIST_HEADERS, LOAD_CODE_ASSIST_METADATA } from "../config/appConstants.js";
+// P09 (#21): _cleanupTimer là background sweep system-wide (không thuộc tenant nào).
+// Bọc runAsSystem để bất kỳ DB call nào trong cleanup được phép fallback default adapter.
+import { runAsSystem } from "@/lib/saas/tenantContext.js";
 
 // ─── Cache ────────────────────────────────────────────────────────────────────
 // connectionId -> { projectId: string, fetchedAt: number }
@@ -54,10 +57,13 @@ export function cleanupNow() {
 /** Start the periodic background cleanup (idempotent). Called automatically on module load. */
 export function startCacheCleanup() {
     if (_cleanupTimer) return;
+    // P09 (#21): system caller — không có tenant context, runAsSystem để getAdapter() fallback OK.
     _cleanupTimer = setInterval(() => {
-        try { cleanupNow(); } catch (e) {
-            console.warn("[ProjectId] cleanup sweep error:", e?.message ?? e);
-        }
+        runAsSystem(() => {
+            try { cleanupNow(); } catch (e) {
+                console.warn("[ProjectId] cleanup sweep error:", e?.message ?? e);
+            }
+        });
     }, CLEANUP_INTERVAL_MS);
     // Unref so the timer doesn't prevent Node from exiting when it is otherwise idle
     _cleanupTimer?.unref?.();
