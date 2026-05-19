@@ -1,6 +1,6 @@
 # LLM AI Router (SaaS) — MASTER PROJECT PLAN
 
-Last reviewed: 2026-05-13
+Last reviewed: 2026-05-19 — Baseline P00–P08 đã hoàn thành; SaaS Hardening P09–P11 + Security baseline P12 đang triển khai.
 
 File này là **nguồn sự thật** cho triển khai fork **ngapngap/9router** hướng SaaS: **chỉ đọc** PostgreSQL New-API (DB `new-api`); giao diện **llmairouter.com**; **không** đăng ký; **không** đổi mật khẩu trong app (khác 9router gốc); user **cô lập** hoàn toàn (chỉ config/metadata của mình); export kiểu db.json **theo user**; **sys admin** xem tổng quan tenant (pha 08, DESIGN **§6**); preset **Ramclouds** trên Providers (DESIGN **§7**).
 
@@ -42,6 +42,7 @@ Các pha thực thi chi tiết nằm trong `plans/` — làm **theo thứ tự s
 | REF | [plans/APPENDIX-ops-testing-performance.md](plans/APPENDIX-ops-testing-performance.md) | Backup SQLite, smoke/tenant test tối thiểu, pool/SQLite perf (free tool) |
 | REF | [plans/DESIGN-pages-and-apis.md](plans/DESIGN-pages-and-apis.md) | §8–§13 hợp đồng API + wireframe UI; §5 SQLite; §5.2.1 onboarding; §6–§7 admin/Ramclouds |
 | REF | [plans/APPENDIX-postgres-new-api-schema.md](plans/APPENDIX-postgres-new-api-schema.md) | Cột thực tế `users`/`tokens`, bcrypt, role 10/100 |
+| REF | [plans/APPENDIX-saas-hardening.md](plans/APPENDIX-saas-hardening.md) | Audit isolation/global-state, env mới, runbook backup/health, rủi ro P09–P11 |
 | 00 | [plans/00-one-shot-runbook.md](plans/00-one-shot-runbook.md) | Spike, stop gate, evidence, subagent |
 | 01 | [plans/01-plan-docs-branch.md](plans/01-plan-docs-branch.md) | Nhánh, tài liệu, tính toàn vẹn plan |
 | 02 | [plans/02-postgres-saas-foundation.md](plans/02-postgres-saas-foundation.md) | `SAAS_DATABASE_URL`, pool `pg`, `.env.example` |
@@ -51,6 +52,10 @@ Các pha thực thi chi tiết nằm trong `plans/` — làm **theo thứ tự s
 | 06 | [plans/06-dashboard-api-authorization.md](plans/06-dashboard-api-authorization.md) | Middleware / guard `/api` cấu hình |
 | 07 | [plans/07-ci-docker-release.md](plans/07-ci-docker-release.md) | GitHub Actions build/push image |
 | 08 | [plans/08-admin-overview.md](plans/08-admin-overview.md) | Sys admin: nhận diện + overview tenant (Postgres chỉ đọc) |
+| 09 | [plans/09-multi-tenant-isolation.md](plans/09-multi-tenant-isolation.md) | Hardening cô lập tenant: driver fallback, `usageRepo`, `consoleLogBuffer`, `rateLimit`, `open-sse` caches |
+| 10 | [plans/10-ops-backup-health.md](plans/10-ops-backup-health.md) | Backup `DATA_DIR` + restore drill, `/api/health` deep check, audit log mở rộng, runbook on-call |
+| 11 | [plans/11-admin-operability.md](plans/11-admin-operability.md) | CLI admin scripts, feature flag env-only, quota guard pre-flight + streaming overrun |
+| 12 | [plans/12-security-audit.md](plans/12-security-audit.md) | Security baseline: CI/supply chain hardening, web headers, rate limit Bearer, CSRF, JWT claims, error message wrap |
 
 ---
 
@@ -70,6 +75,10 @@ Các pha thực thi chi tiết nằm trong `plans/` — làm **theo thứ tự s
 | Dashboard / export (SaaS) | SQLite **per `users.id`** dưới `DATA_DIR/saas/users/` — chi tiết [DESIGN §4–§5](plans/DESIGN-pages-and-apis.md) |
 | User / token | `public.users`, `public.tokens` — chi tiết cột [APPENDIX](plans/APPENDIX-postgres-new-api-schema.md); pool ở `plans/02` |
 | Đăng ký | **Không** triển khai `/register` |
+
+**SaaS Hardening (P09–P11)** — sau khi baseline P00–P08 đóng, tập trung chặn leak đa tenant ở `usageRepo`, `consoleLogBuffer`, `rateLimit`, `open-sse` caches; bổ sung backup `DATA_DIR` + restore drill, health check sâu, audit log mở rộng; cung cấp CLI admin và quota guard pre-flight. Chi tiết [APPENDIX-saas-hardening.md](plans/APPENDIX-saas-hardening.md).
+
+**Security baseline (P12)** — sau P11, đóng các lỗ hổng code/CI/web không thuộc multi-tenancy: JWT_SECRET fallback hardcode, security headers (CSP/HSTS/XFO...), Trivy CI fail-on-CRITICAL, pin actions SHA, lock file tracked, rate limit `/api/v1/*` Bearer per-key, CSRF double-submit, JWT `aud`/`iss` claims, error.message wrap. Chi tiết [12-security-audit.md](plans/12-security-audit.md).
 
 ---
 
@@ -130,10 +139,33 @@ Một plan được coi là **đủ** khi:
 | P08.1 | `SAAS_ADMIN_ROLE_VALUES` + `SAAS_ADMIN_FALLBACK_USER_ID` (numeric validation) | [x] |
 | P08.2 | Admin UI: KPI 3 thẻ, toolbar, cột role/status/mtime, `totalUsersInDb` | [x] |
 | P08.3 | Audit log module `src/lib/saas/auditLog.js` + tích hợp admin overview | [x] |
+| P09 | Multi-tenant isolation hardening (driver fallback, `usageRepo`, `consoleLogBuffer`, `rateLimit`, `open-sse` caches) | [ ] |
+| P09.1 | `runAsSystem` whitelist + hostile-tenant integration test | [ ] |
+| P09.2 | Audit script `scripts/audit/global-state.mjs` báo 0 global cache | [ ] |
+| P10 | Backup + health check + audit log mở rộng + runbook on-call | [ ] |
+| P10.1 | Backup script + restore drill quarterly + retention 7d/4w/3m + encrypt | [ ] |
+| P10.2 | Health check `/api/health` deep (Postgres + DATA_DIR + disk) trả 503 khi fail | [ ] |
+| P10.3 | Audit log thêm 6 event (settings.save, connection.add/remove, apiKey.rotate, quota.exhausted/overrun, login.failed) | [ ] |
+| P11 | Admin operability: CLI scripts + feature flag env-only + quota guard edge | [ ] |
+| P11.1 | 5 CLI scripts (disable/enable user, audit-query, usage-report, reset-password) + dry-run + audit | [ ] |
+| P11.2 | Quota guard pre-flight 402 trước upstream + streaming overrun audit | [ ] |
+| P11.3 | `.env.example` cập nhật đủ 6 nhóm env (Identity/Admin/Console-audit/Backup/Quota/Cache strict) | [ ] |
+| P12 | Security baseline (CI/web/JWT/CSRF) | [ ] |
+| P12.1 | HIGH-1: JWT_SECRET throw nếu missing trong production (bỏ fallback hardcode) | [ ] |
+| P12.2 | HIGH-2: Trivy CI fail-on-CRITICAL + HIGH-3: pin third-party actions SHA | [ ] |
+| P12.3 | HIGH-4: package-lock.json tracked + CI dùng `npm ci` | [ ] |
+| P12.4 | HIGH-5: 6 security header trong `next.config.mjs` (CSP, HSTS, XFO, XCTO, Referrer, Permissions) | [ ] |
+| P12.5 | HIGH-6: rate limit `/api/v1/*` Bearer per `apiKeyId` | [ ] |
+| P12.6 | HIGH-7: redactSecrets helper + lint rule cho `console.error` upstream | [ ] |
+| P12.7 | MED: CSRF double-submit + JWT aud/iss + error.message wrap (24 routes) + admin/login RL + npm audit CI | [ ] |
 
 ### Issue GitHub (pha đang làm)
 
 - **P02:** [#1 — Postgres pool + SAAS_DATABASE_URL](https://github.com/ngapngap/9router/issues/1) — PR [#2](https://github.com/ngapngap/9router/pull/2)
+- **P09:** [#21 — Multi-tenant isolation hardening](https://github.com/ngapngap/9router/issues/21)
+- **P10:** [#23 — Ops, backup, health, audit](https://github.com/ngapngap/9router/issues/23)
+- **P11:** [#22 — Admin operability — CLI scripts, quota guard](https://github.com/ngapngap/9router/issues/22)
+- **P12:** [#24 — Security baseline — CI/web/JWT/CSRF](https://github.com/ngapngap/9router/issues/24)
 
 ---
 
@@ -143,6 +175,12 @@ Một plan được coi là **đủ** khi:
 - **Latency** Tailscale → Postgres.
 - **Phụ thuộc New-API** — downtime hoặc schema đổi phía hệ thống identity có thể ảnh hưởng đăng nhập/proxy; **không** có SLA từ plan này (dự án phi thương mại — xem **§0**).
 - **Bảo mật**: không commit secret; JWT production; export JSON không lộ dữ liệu user khác; admin overview có **enumerate user** — hạn chế PII trong log, bắt buộc auth admin mạnh (`SAAS_ADMIN_USER_IDS` hoặc **`role IN (10,100)`** qua `SAAS_ADMIN_ROLE_VALUES`).
+- **P09 — `runAsSystem` whitelist**: throw on missing tenant context có thể phá vỡ startup hooks/jobs nền — mitigate bằng whitelist allow-list các call-site hệ thống, log cảnh báo nếu chạm whitelist ngoài dự kiến.
+- **P09 — inode pressure SQLite per-user**: số file SQLite >50k user → áp lực inode trên ext4/xfs; ngưỡng cảnh báo + plan migrate Option C (gộp shard / Postgres tenant table) nêu trong [APPENDIX-saas-hardening §4](plans/APPENDIX-saas-hardening.md).
+- **P09 — token cache module-level (`src/lib/open-sse/`)**: nhiều caller đã phụ thuộc cache toàn cục; refactor sang per-tenant gắn sau env flag `SAAS_TENANT_CACHE_STRICT` để rollout dần, tránh regress streaming.
+- **P12 — JWT_SECRET fallback hardcode**: `dashboardSession.js:3-5` có fallback `"9router-default-secret-change-me"` không throw — ai đọc repo public đều forge admin token. P12 throw nếu `NODE_ENV==="production"` && env missing; phải verify trước public release.
+- **P12 — Trivy không fail CI**: `ci.yml:61-85` `exit-code: "0"` + `continue-on-error: true` → CRITICAL CVE bị nuốt. P12 đổi `exit-code: 1` cho CRITICAL; trước fix, mọi CVE chỉ là cảnh báo nhẹ.
+- **P12 — Actions không pin SHA**: `trivy-action@master` (mutable) + các action @v4 tag float — supply chain attack từ third-party có thể inject malicious step. P12 pin SHA full 40 ký tự; cần Dependabot weekly update.
 
 ---
 
