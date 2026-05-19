@@ -2,15 +2,17 @@ import { SignJWT, jwtVerify } from "jose";
 
 // P12 (#24) HIGH-1: Throw nếu JWT_SECRET missing trong production.
 // Fallback hardcode "9router-default-secret-change-me" cho dev mode only.
+// Skip check during Next.js build phase (page data collection runs module top-level).
 const JWT_SECRET_RAW = process.env.JWT_SECRET;
-if (!JWT_SECRET_RAW && process.env.NODE_ENV === "production") {
+const isNextBuild = process.env.NEXT_PHASE === "phase-production-build";
+if (!JWT_SECRET_RAW && process.env.NODE_ENV === "production" && !isNextBuild) {
   throw new Error(
     "[SECURITY] JWT_SECRET env is required in production. " +
     "Set a strong random secret (>= 32 chars). " +
     "Refs: https://github.com/ngapngap/9router/issues/24"
   );
 }
-if (!JWT_SECRET_RAW) {
+if (!JWT_SECRET_RAW && !isNextBuild) {
   console.warn("[SECURITY] JWT_SECRET not set — using insecure default. DO NOT use in production.");
 }
 const SECRET = new TextEncoder().encode(JWT_SECRET_RAW || "9router-default-secret-change-me");
