@@ -34,6 +34,21 @@ export async function runV1WithBearerAuth(request, inner) {
         { status: 401, headers: { "Access-Control-Allow-Origin": "*" } },
       );
     }
+
+    // P11 (#22): quota guard pre-flight — reject 402 if user quota exhausted
+    const { getTenantUserId } = await import("./tenantContext.js");
+    const userId = getTenantUserId();
+    if (userId != null) {
+      const { assertQuotaForRequest } = await import("./quotaGuard.js");
+      const quotaCheck = await assertQuotaForRequest({ userId, model: "unknown", provider: "unknown" });
+      if (!quotaCheck.allowed) {
+        return Response.json(
+          { error: quotaCheck.error },
+          { status: 402, headers: { "Access-Control-Allow-Origin": "*" } },
+        );
+      }
+    }
+
     return inner();
   });
 }
