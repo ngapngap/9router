@@ -1,6 +1,8 @@
 /**
  * Project ID Service - Fetch and cache real Project IDs from Google Cloud Code API
  *
+ * P09 (#21): projectIdCache + pendingFetches scoped per-tenant qua tenantCache helper.
+ * connectionId collision giữa user (SQLite per-user auto-increment) đã được fix.
  *
  * Instead of generating random project IDs (e.g. "useful-spark-a1b2c"),
  * this service fetches the real Project ID bound to the authenticated user's account.
@@ -8,20 +10,23 @@
  */
 
 import { CLOUD_CODE_API, LOAD_CODE_ASSIST_HEADERS, LOAD_CODE_ASSIST_METADATA } from "../config/appConstants.js";
+// P09 (#21): _cleanupTimer là background sweep system-wide (không thuộc tenant nào).
+// Bọc runAsSystem để bất kỳ DB call nào trong cleanup được phép fallback default adapter.
+import { runAsSystem, getTenantUserId } from "@/lib/saas/tenantContext.js";
+import { getTenantScopedCache, sweepIdleTenantCaches } from "../utils/tenantCache.js";
 
 // ─── Cache ────────────────────────────────────────────────────────────────────
-// connectionId -> { projectId: string, fetchedAt: number }
-const projectIdCache = new Map();
 
 /** How long a cached project ID is considered fresh (1 hour). */
 const CACHE_TTL_MS = 60 * 60 * 1000;
 
-// ─── Pending-fetch deduplication ─────────────────────────────────────────────
-// connectionId -> { promise: Promise<string|null>, controller: AbortController, startedAt: number }
-const pendingFetches = new Map();
-
-/** Abort and evict a pending fetch that has been running longer than this (2 min). */
-const PENDING_TTL_MS = 2 * 60 * 1000;
+// P09 (#21): scope cache per-tenant để tránh connectionId collision giữa user.
+function getProjectIdCache(userId) {
+    return getTenantScopedCache("project-id-cache", userId);
+}
+function getPendingFetches(userId) {
+    return getTenantScopedCache("project-id-pending", userId);
+}
 
 // ─── Periodic cleanup ────────────────────────────────────────────────────────
 /** How often the background sweep runs (10 min). */
@@ -29,35 +34,26 @@ const CLEANUP_INTERVAL_MS = 10 * 60 * 1000;
 
 let _cleanupTimer = null;
 
-/** Run one sweep immediately: evict stale cache entries and abort orphaned pending fetches. */
+/** Run one sweep immediately: evict stale cache entries and abort orphaned pending fetches.
+ *  P09 (#21): cleanupNow chạy trong runAsSystem (không có tenant context) →
+ *  dùng sweepIdleTenantCaches() để sweep tất cả tenant scopes thay vì iterate trực tiếp.
+ */
 export function cleanupNow() {
-    const now = Date.now();
-
-    for (const [id, entry] of projectIdCache) {
-        if (!entry || now - entry.fetchedAt >= CACHE_TTL_MS) {
-            projectIdCache.delete(id);
-        }
-    }
-
-    for (const [id, item] of pendingFetches) {
-        if (!item || typeof item.startedAt !== "number") {
-            pendingFetches.delete(id);
-            continue;
-        }
-        if (now - item.startedAt > PENDING_TTL_MS) {
-            try { item.controller.abort(); } catch (_) { /* ignore */ }
-            pendingFetches.delete(id);
-        }
-    }
+    // sweepIdleTenantCaches handles TTL-based eviction across all tenant scopes
+    // (bao gồm "project-id-cache" và "project-id-pending").
+    sweepIdleTenantCaches();
 }
 
 /** Start the periodic background cleanup (idempotent). Called automatically on module load. */
 export function startCacheCleanup() {
     if (_cleanupTimer) return;
+    // P09 (#21): system caller — không có tenant context, runAsSystem để getAdapter() fallback OK.
     _cleanupTimer = setInterval(() => {
-        try { cleanupNow(); } catch (e) {
-            console.warn("[ProjectId] cleanup sweep error:", e?.message ?? e);
-        }
+        runAsSystem(() => {
+            try { cleanupNow(); } catch (e) {
+                console.warn("[ProjectId] cleanup sweep error:", e?.message ?? e);
+            }
+        });
     }, CLEANUP_INTERVAL_MS);
     // Unref so the timer doesn't prevent Node from exiting when it is otherwise idle
     _cleanupTimer?.unref?.();
@@ -85,6 +81,10 @@ startCacheCleanup();
  */
 export async function getProjectIdForConnection(connectionId, accessToken) {
     if (!connectionId || !accessToken) return null;
+
+    const userId = getTenantUserId();
+    const projectIdCache = getProjectIdCache(userId);
+    const pendingFetches = getPendingFetches(userId);
 
     // Return cached value if still fresh
     const cached = projectIdCache.get(connectionId);
@@ -126,6 +126,8 @@ export async function getProjectIdForConnection(connectionId, accessToken) {
  * Call this when a connection's credentials are fully revoked or refreshed.
  */
 export function invalidateProjectId(connectionId) {
+    const userId = getTenantUserId();
+    const projectIdCache = getProjectIdCache(userId);
     projectIdCache.delete(connectionId);
 }
 
@@ -137,6 +139,9 @@ export function invalidateProjectId(connectionId) {
  */
 export function removeConnection(connectionId) {
     if (!connectionId) return;
+    const userId = getTenantUserId();
+    const projectIdCache = getProjectIdCache(userId);
+    const pendingFetches = getPendingFetches(userId);
     projectIdCache.delete(connectionId);
     const pending = pendingFetches.get(connectionId);
     if (pending) {

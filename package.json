@@ -8,7 +8,7 @@
     "lint": "eslint src --max-warnings 0",
     "lint:ci": "eslint src/lib src/app/api src/dashboardGuard.js src/proxy.js src/sse --max-warnings 0",
     "test": "npx vitest run --config tests/vitest.config.js",
-    "test:ci": "npx vitest run --config tests/vitest.config.js tests/unit/db-driver-chain.test.js tests/unit/saas-pg-pool.test.js tests/unit/saas-auth-p03.test.js tests/unit/saas-p04-ui.test.js tests/unit/saas-validate-api-key.test.js",
+    "test:ci": "npx vitest run --config tests/vitest.config.js tests/unit/db-driver-chain.test.js tests/unit/saas-pg-pool.test.js tests/unit/saas-auth-p03.test.js tests/unit/saas-p04-ui.test.js tests/unit/saas-validate-api-key.test.js tests/unit/db-driver-no-fallback.test.js tests/unit/rate-limit-per-user.test.js",
     "build": "cross-env NODE_ENV=production next build --webpack",
     "start": "cross-env NODE_ENV=production next start",
     "dev:bun": "bun --bun next dev --webpack --port 20128",

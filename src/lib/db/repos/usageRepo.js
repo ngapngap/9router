@@ -1,31 +1,129 @@
+/**
+ * usageRepo.js — Per-tenant usage statistics repository.
+ *
+ * P09 (#21) refactor: 6 globals (`_pendingRequests`, `_pendingTimers`, `_recentRing`,
+ * `_lastErrorProvider`, `_statsEmitter`, `_connectionMapCache`) đã chuyển sang
+ * Map<userId, State>. Self-host mode dùng key sentinel "_self_host".
+ *
+ * Mọi public function tự resolve userId qua AsyncLocalStorage (`getTenantUserId`)
+ * hoặc nhận `opts.userId` explicit. Trong SaaS mode, nếu thiếu cả 2 → throw.
+ *
+ * `_statsEmitter` giữ 1 instance, payload event kèm `userId`. Subscriber phải
+ * filter theo session user (xem `src/app/api/usage/stream/route.js`).
+ *
+ * Refs: https://github.com/ngapngap/9router/issues/21
+ */
+
 import { EventEmitter } from "events";
 import { getAdapter } from "../driver.js";
 import { parseJson, stringifyJson } from "../helpers/jsonCol.js";
-import { getMeta, setMeta } from "../helpers/metaStore.js";
+import { getTenantUserId } from "@/lib/saas/tenantContext.js";
 
 const PENDING_TIMEOUT_MS = 60 * 1000;
 const RING_CAP = 50;
 const CONN_CACHE_TTL_MS = 30 * 1000;
 const PERIOD_MS = { "24h": 86400000, "7d": 604800000, "30d": 2592000000, "60d": 5184000000 };
 
-// In-memory state shared across Next.js modules
-if (!global._pendingRequests) global._pendingRequests = { byModel: {}, byAccount: {} };
-if (!global._lastErrorProvider) global._lastErrorProvider = { provider: "", ts: 0 };
-if (!global._statsEmitter) {
-  global._statsEmitter = new EventEmitter();
-  global._statsEmitter.setMaxListeners(50);
+/** Sentinel key dùng cho self-host mode (1 user, không phân chia tenant). */
+const SELF_HOST_KEY = "_self_host";
+
+// ─── Per-tenant state Maps ───────────────────────────────────────────────────
+// Mỗi Map keyed by userId (number/string) hoặc SELF_HOST_KEY trong self-host mode.
+
+/** @type {Map<string|number, { byModel: Record<string, number>, byAccount: Record<string, Record<string, number>> }>} */
+const pendingRequestsByUser = new Map();
+
+/** @type {Map<string|number, { provider: string, ts: number }>} */
+const lastErrorProviderByUser = new Map();
+
+/** @type {Map<string|number, Map<string, ReturnType<typeof setTimeout>>>} */
+const pendingTimersByUser = new Map();
+
+/** @type {Map<string|number, { items: any[], initialized: boolean }>} */
+const recentRingByUser = new Map();
+
+/** @type {Map<string|number, { map: Record<string, string>, ts: number }>} */
+const connectionMapCacheByUser = new Map();
+
+/**
+ * Shared EventEmitter — giữ 1 instance toàn process.
+ * Mọi `emit(event, payload)` PHẢI kèm `payload.userId` để subscriber filter.
+ */
+const _statsEmitter = new EventEmitter();
+_statsEmitter.setMaxListeners(50);
+export const statsEmitter = _statsEmitter;
+
+// ─── Internal helpers ────────────────────────────────────────────────────────
+
+/**
+ * Resolve userId từ ALS context hoặc explicit opts.userId.
+ * Self-host: trả về SELF_HOST_KEY khi không có context.
+ * SaaS: throw nếu không có context (caller phải runWithTenant/runAsSystem).
+ *
+ * @param {number|string|null|undefined} explicitUserId
+ * @returns {string|number}
+ */
+function _resolveUserId(explicitUserId) {
+  if (explicitUserId != null) return explicitUserId;
+  const uid = getTenantUserId();
+  if (uid != null) return uid;
+  if (process.env.SAAS_ENABLED === "true") {
+    throw new Error("usageRepo: missing tenant context (SAAS_ENABLED mode) — wrap caller in runWithTenant or pass opts.userId");
+  }
+  return SELF_HOST_KEY;
 }
-if (!global._pendingTimers) global._pendingTimers = {};
-if (!global._recentRing) global._recentRing = { items: [], initialized: false };
-if (!global._connectionMapCache) global._connectionMapCache = { map: {}, ts: 0 };
 
-const pendingRequests = global._pendingRequests;
-const lastErrorProvider = global._lastErrorProvider;
-const pendingTimers = global._pendingTimers;
-const recentRing = global._recentRing;
-const connCache = global._connectionMapCache;
+/** @returns {{ byModel: Record<string, number>, byAccount: Record<string, Record<string, number>> }} */
+function _ensurePending(uid) {
+  let s = pendingRequestsByUser.get(uid);
+  if (!s) {
+    s = { byModel: {}, byAccount: {} };
+    pendingRequestsByUser.set(uid, s);
+  }
+  return s;
+}
 
-export const statsEmitter = global._statsEmitter;
+/** @returns {{ provider: string, ts: number }} */
+function _ensureLastError(uid) {
+  let s = lastErrorProviderByUser.get(uid);
+  if (!s) {
+    s = { provider: "", ts: 0 };
+    lastErrorProviderByUser.set(uid, s);
+  }
+  return s;
+}
+
+/** @returns {Map<string, ReturnType<typeof setTimeout>>} */
+function _ensureTimers(uid) {
+  let s = pendingTimersByUser.get(uid);
+  if (!s) {
+    s = new Map();
+    pendingTimersByUser.set(uid, s);
+  }
+  return s;
+}
+
+/** @returns {{ items: any[], initialized: boolean }} */
+function _ensureRing(uid) {
+  let s = recentRingByUser.get(uid);
+  if (!s) {
+    s = { items: [], initialized: false };
+    recentRingByUser.set(uid, s);
+  }
+  return s;
+}
+
+/** @returns {{ map: Record<string, string>, ts: number }} */
+function _ensureConnCache(uid) {
+  let s = connectionMapCacheByUser.get(uid);
+  if (!s) {
+    s = { map: {}, ts: 0 };
+    connectionMapCacheByUser.set(uid, s);
+  }
+  return s;
+}
+
+// ─── Pure helpers (không phụ thuộc state) ────────────────────────────────────
 
 function getLocalDateKey(timestamp) {
   const d = timestamp ? new Date(timestamp) : new Date();
@@ -76,33 +174,36 @@ function aggregateEntryToDay(day, entry) {
   addToCounter(day.byEndpoint, epKey, { ...vals, meta: { endpoint, rawModel: entry.model, provider: entry.provider } });
 }
 
-function pushToRing(entry) {
-  recentRing.items.push(entry);
-  if (recentRing.items.length > RING_CAP) {
-    recentRing.items = recentRing.items.slice(-RING_CAP);
+function pushToRing(uid, entry) {
+  const ring = _ensureRing(uid);
+  ring.items.push(entry);
+  if (ring.items.length > RING_CAP) {
+    ring.items = ring.items.slice(-RING_CAP);
   }
 }
 
-async function getConnectionMapCached() {
-  if (Date.now() - connCache.ts < CONN_CACHE_TTL_MS) return connCache.map;
+async function getConnectionMapCached(uid) {
+  const cache = _ensureConnCache(uid);
+  if (Date.now() - cache.ts < CONN_CACHE_TTL_MS) return cache.map;
   try {
     const { getProviderConnections } = await import("./connectionsRepo.js");
     const all = await getProviderConnections();
     const map = {};
     for (const c of all) map[c.id] = c.name || c.email || c.id;
-    connCache.map = map;
-    connCache.ts = Date.now();
+    cache.map = map;
+    cache.ts = Date.now();
   } catch {}
-  return connCache.map;
+  return cache.map;
 }
 
-async function ensureRingInitialized() {
-  if (recentRing.initialized) return;
-  recentRing.initialized = true;
+async function ensureRingInitialized(uid) {
+  const ring = _ensureRing(uid);
+  if (ring.initialized) return;
+  ring.initialized = true;
   try {
     const db = await getAdapter();
     const rows = db.all(`SELECT timestamp, provider, model, connectionId, apiKey, endpoint, cost, status, tokens FROM usageHistory ORDER BY id DESC LIMIT ?`, [RING_CAP]);
-    recentRing.items = rows.reverse().map((r) => ({
+    ring.items = rows.reverse().map((r) => ({
       timestamp: r.timestamp, provider: r.provider, model: r.model, connectionId: r.connectionId,
       apiKey: r.apiKey, endpoint: r.endpoint, cost: r.cost, status: r.status,
       tokens: parseJson(r.tokens, {}),
@@ -150,56 +251,90 @@ async function calculateCost(provider, model, tokens) {
   }
 }
 
-export function trackPendingRequest(model, provider, connectionId, started, error = false) {
+// ─── Public API ──────────────────────────────────────────────────────────────
+
+/**
+ * Track in-flight request count cho cặp (model, provider, connectionId).
+ * Phát event `pending` qua `statsEmitter` với payload `{ userId }`.
+ *
+ * @param {string} model
+ * @param {string} provider
+ * @param {string|null} connectionId
+ * @param {boolean} started true=request bắt đầu, false=kết thúc
+ * @param {boolean} [error=false] true=request kết thúc với lỗi (cập nhật lastErrorProvider)
+ * @param {{ userId?: number|string }} [opts] explicit userId (cho background job)
+ */
+export function trackPendingRequest(model, provider, connectionId, started, error = false, opts = {}) {
+  const uid = _resolveUserId(opts.userId);
+  const pending = _ensurePending(uid);
+  const lastError = _ensureLastError(uid);
+  const timers = _ensureTimers(uid);
+
   const modelKey = provider ? `${model} (${provider})` : model;
   const timerKey = `${connectionId}|${modelKey}`;
 
-  if (!pendingRequests.byModel[modelKey]) pendingRequests.byModel[modelKey] = 0;
-  pendingRequests.byModel[modelKey] = Math.max(0, pendingRequests.byModel[modelKey] + (started ? 1 : -1));
-  if (pendingRequests.byModel[modelKey] === 0) delete pendingRequests.byModel[modelKey];
+  if (!pending.byModel[modelKey]) pending.byModel[modelKey] = 0;
+  pending.byModel[modelKey] = Math.max(0, pending.byModel[modelKey] + (started ? 1 : -1));
+  if (pending.byModel[modelKey] === 0) delete pending.byModel[modelKey];
 
   if (connectionId) {
-    if (!pendingRequests.byAccount[connectionId]) pendingRequests.byAccount[connectionId] = {};
-    if (!pendingRequests.byAccount[connectionId][modelKey]) pendingRequests.byAccount[connectionId][modelKey] = 0;
-    pendingRequests.byAccount[connectionId][modelKey] = Math.max(0, pendingRequests.byAccount[connectionId][modelKey] + (started ? 1 : -1));
-    if (pendingRequests.byAccount[connectionId][modelKey] === 0) {
-      delete pendingRequests.byAccount[connectionId][modelKey];
-      if (Object.keys(pendingRequests.byAccount[connectionId]).length === 0) {
-        delete pendingRequests.byAccount[connectionId];
+    if (!pending.byAccount[connectionId]) pending.byAccount[connectionId] = {};
+    if (!pending.byAccount[connectionId][modelKey]) pending.byAccount[connectionId][modelKey] = 0;
+    pending.byAccount[connectionId][modelKey] = Math.max(0, pending.byAccount[connectionId][modelKey] + (started ? 1 : -1));
+    if (pending.byAccount[connectionId][modelKey] === 0) {
+      delete pending.byAccount[connectionId][modelKey];
+      if (Object.keys(pending.byAccount[connectionId]).length === 0) {
+        delete pending.byAccount[connectionId];
       }
     }
   }
 
   if (started) {
-    clearTimeout(pendingTimers[timerKey]);
-    pendingTimers[timerKey] = setTimeout(() => {
-      delete pendingTimers[timerKey];
-      if (pendingRequests.byModel[modelKey] > 0) pendingRequests.byModel[modelKey] = 0;
-      if (connectionId && pendingRequests.byAccount[connectionId]?.[modelKey] > 0) {
-        pendingRequests.byAccount[connectionId][modelKey] = 0;
+    const existing = timers.get(timerKey);
+    if (existing) clearTimeout(existing);
+    const tid = setTimeout(() => {
+      timers.delete(timerKey);
+      if (pending.byModel[modelKey] > 0) pending.byModel[modelKey] = 0;
+      if (connectionId && pending.byAccount[connectionId]?.[modelKey] > 0) {
+        pending.byAccount[connectionId][modelKey] = 0;
       }
-      statsEmitter.emit("pending");
+      statsEmitter.emit("pending", { userId: uid });
     }, PENDING_TIMEOUT_MS);
+    timers.set(timerKey, tid);
   } else {
-    clearTimeout(pendingTimers[timerKey]);
-    delete pendingTimers[timerKey];
+    const existing = timers.get(timerKey);
+    if (existing) {
+      clearTimeout(existing);
+      timers.delete(timerKey);
+    }
   }
 
   if (!started && error && provider) {
-    lastErrorProvider.provider = provider.toLowerCase();
-    lastErrorProvider.ts = Date.now();
+    lastError.provider = provider.toLowerCase();
+    lastError.ts = Date.now();
   }
 
   const t = new Date().toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
   console.log(`[${t}] [PENDING] ${started ? "START" : "END"}${error ? " (ERROR)" : ""} | provider=${provider} | model=${model}`);
-  statsEmitter.emit("pending");
+  statsEmitter.emit("pending", { userId: uid });
 }
 
-export async function getActiveRequests() {
-  const activeRequests = [];
-  const connectionMap = await getConnectionMapCached();
+/**
+ * Trả về snapshot active requests + recent requests cho user hiện tại.
+ *
+ * @param {{ userId?: number|string }} [opts]
+ * @returns {Promise<{ activeRequests: any[], recentRequests: any[], errorProvider: string }>}
+ */
+export async function getActiveRequests(opts = {}) {
+  const uid = _resolveUserId(opts.userId);
+  const pending = _ensurePending(uid);
+  const lastError = _ensureLastError(uid);
+  const ring = _ensureRing(uid);
 
-  for (const [connectionId, models] of Object.entries(pendingRequests.byAccount)) {
+  const activeRequests = [];
+  const connectionMap = await getConnectionMapCached(uid);
+
+  for (const [connectionId, models] of Object.entries(pending.byAccount)) {
     for (const [modelKey, count] of Object.entries(models)) {
       if (count > 0) {
         const accountName = connectionMap[connectionId] || `Account ${connectionId.slice(0, 8)}...`;
@@ -213,9 +348,9 @@ export async function getActiveRequests() {
     }
   }
 
-  await ensureRingInitialized();
+  await ensureRingInitialized(uid);
   const seen = new Set();
-  const recentRequests = [...recentRing.items]
+  const recentRequests = [...ring.items]
     .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
     .map((e) => {
       const t = e.tokens || {};
@@ -236,12 +371,20 @@ export async function getActiveRequests() {
     })
     .slice(0, 20);
 
-  const errorProvider = (Date.now() - lastErrorProvider.ts < 10000) ? lastErrorProvider.provider : "";
+  const errorProvider = (Date.now() - lastError.ts < 10000) ? lastError.provider : "";
   return { activeRequests, recentRequests, errorProvider };
 }
 
-export async function saveRequestUsage(entry) {
+/**
+ * Persist 1 usage entry vào DB (history + daily aggregate + lifetime counter).
+ * Push vào ring buffer của user và emit `update` event với payload `{ userId }`.
+ *
+ * @param {object} entry
+ * @param {{ userId?: number|string }} [opts]
+ */
+export async function saveRequestUsage(entry, opts = {}) {
   try {
+    const uid = _resolveUserId(opts.userId);
     const db = await getAdapter();
 
     if (!entry.timestamp) entry.timestamp = new Date().toISOString();
@@ -279,13 +422,17 @@ export async function saveRequestUsage(entry) {
       db.run(`INSERT INTO _meta(key, value) VALUES('totalRequestsLifetime', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`, [String(next)]);
     });
 
-    pushToRing(entry);
-    statsEmitter.emit("update");
+    pushToRing(uid, entry);
+    statsEmitter.emit("update", { userId: uid });
   } catch (e) {
     console.error("Failed to save usage stats:", e?.message || e);
   }
 }
 
+/**
+ * Lấy raw history rows. DB adapter đã routed theo tenant ở driver layer;
+ * không cần thao tác state in-memory.
+ */
 export async function getUsageHistory(filter = {}) {
   const db = await getAdapter();
   const conds = [];
@@ -316,7 +463,17 @@ function loadDaysInRange(adapter, maxDays) {
   return adapter.all(`SELECT dateKey, data FROM usageDaily WHERE dateKey >= ?`, [cutoffKey]);
 }
 
-export async function getUsageStats(period = "all") {
+/**
+ * Tổng hợp usage stats theo period cho user hiện tại.
+ *
+ * @param {"24h"|"7d"|"30d"|"60d"|"all"} [period="all"]
+ * @param {{ userId?: number|string }} [opts]
+ */
+export async function getUsageStats(period = "all", opts = {}) {
+  const uid = _resolveUserId(opts.userId);
+  const pending = _ensurePending(uid);
+  const lastError = _ensureLastError(uid);
+
   const db = await getAdapter();
 
   const [{ getProviderConnections }, { getApiKeys }, { getProviderNodes }] = await Promise.all([
@@ -369,14 +526,14 @@ export async function getUsageStats(period = "all") {
     totalPromptTokens: 0, totalCompletionTokens: 0, totalCost: 0,
     byProvider: {}, byModel: {}, byAccount: {}, byApiKey: {}, byEndpoint: {},
     last10Minutes: [],
-    pending: pendingRequests,
+    pending,
     activeRequests: [],
     recentRequests,
-    errorProvider: (Date.now() - lastErrorProvider.ts < 10000) ? lastErrorProvider.provider : "",
+    errorProvider: (Date.now() - lastError.ts < 10000) ? lastError.provider : "",
   };
 
   // Active requests
-  for (const [connectionId, models] of Object.entries(pendingRequests.byAccount)) {
+  for (const [connectionId, models] of Object.entries(pending.byAccount)) {
     for (const [modelKey, count] of Object.entries(models)) {
       if (count > 0) {
         const accountName = connectionMap[connectionId] || `Account ${connectionId.slice(0, 8)}...`;
@@ -610,6 +767,10 @@ export async function getUsageStats(period = "all") {
   return stats;
 }
 
+/**
+ * Chart data theo period (DB-backed; không phụ thuộc state in-memory).
+ * Tenant routing đã thực hiện ở driver layer.
+ */
 export async function getChartData(period = "7d") {
   const db = await getAdapter();
   const now = Date.now();

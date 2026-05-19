@@ -1,3 +1,15 @@
+/**
+ * rateLimit.js — Rate limiter keyed by (userId, ip, route).
+ *
+ * P09 (#21): Trước đây keyed by IP only — 2 user cùng NAT bị nhiễu, đổi IP bypass.
+ * Giờ key = `${userId ?? "anon"}|${ip}|${route ?? "*"}`.
+ *
+ * Backward compat: gọi checkRateLimit("1.2.3.4") (string) vẫn hoạt động
+ * (coerce thành { ip: "1.2.3.4" }).
+ *
+ * Refs: https://github.com/ngapngap/9router/issues/21
+ */
+
 const WINDOW_MS = 60_000;
 const MAX_REQUESTS = 5;
 const store = new Map();
@@ -36,13 +48,31 @@ export function createRateLimiter({ windowMs = WINDOW_MS, maxRequests = MAX_REQU
   };
 }
 
-export function checkRateLimit(ip) {
+/**
+ * Check rate limit.
+ *
+ * @param {string|{userId?: string|number, ip: string, route?: string}} arg
+ *   - String: backward compat, treated as IP.
+ *   - Object: full key {userId, ip, route}.
+ * @returns {{ allowed: boolean, remaining: number, resetMs: number }}
+ */
+export function checkRateLimit(arg) {
+  let userId = null, ip = "unknown", route = "*";
+  if (typeof arg === "string") {
+    ip = arg;
+  } else if (arg && typeof arg === "object") {
+    userId = arg.userId ?? null;
+    ip = arg.ip ?? "unknown";
+    route = arg.route ?? "*";
+  }
+  const key = `${userId ?? "anon"}|${ip}|${route}`;
+
   const now = Date.now();
-  let entry = store.get(ip);
+  let entry = store.get(key);
 
   if (!entry || now - entry.start > WINDOW_MS) {
     entry = { start: now, count: 1 };
-    store.set(ip, entry);
+    store.set(key, entry);
     return { allowed: true, remaining: MAX_REQUESTS - 1, resetMs: entry.start + WINDOW_MS };
   }
 

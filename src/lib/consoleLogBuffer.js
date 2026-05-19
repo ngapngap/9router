@@ -1,5 +1,18 @@
+/**
+ * consoleLogBuffer.js — Patched console.* capture với SaaS guard + redact.
+ *
+ * P09 (#21):
+ *   - Mỗi log entry tag userId từ ALS (fallback "system" nếu ngoài tenant context).
+ *   - Redact 3 pattern bí mật (Bearer, sk-*, Basic) trước khi push vào buffer.
+ *   - getConsoleLogs({ userId }) filter theo user cho admin endpoint.
+ *
+ * SaaS mode: disable hẳn trừ khi SAAS_ENABLE_CONSOLE_LOGS_FOR_ADMIN=true.
+ *
+ * Refs: https://github.com/ngapngap/9router/issues/21
+ */
 import { EventEmitter } from "events";
 import { CONSOLE_LOG_CONFIG } from "@/shared/constants/config.js";
+import { getTenantUserId } from "@/lib/saas/tenantContext.js";
 
 const consoleLevels = ["log", "info", "warn", "error", "debug"];
 
@@ -42,13 +55,37 @@ function formatArg(arg) {
   }
 }
 
-function appendLine(line) {
-  state.logs.push(line);
+// P09 (#21): Redact secrets trước khi push vào buffer.
+const REDACT_PATTERNS = [
+  { regex: /Bearer\s+[A-Za-z0-9._\-]+/g, replace: "Bearer [REDACTED]" },
+  { regex: /sk-[A-Za-z0-9]+/g, replace: "sk-[REDACTED]" },
+  { regex: /Basic\s+[A-Za-z0-9+/=]+/g, replace: "Basic [REDACTED]" },
+];
+
+function redactSecrets(str) {
+  let out = str;
+  for (const p of REDACT_PATTERNS) {
+    out = out.replace(p.regex, p.replace);
+  }
+  return out;
+}
+
+function appendLine(level, line) {
+  // P09 (#21): tag userId + redact secrets
+  let userId = null;
+  try { userId = getTenantUserId(); } catch { /* ngoài ALS context */ }
+  const entry = {
+    ts: Date.now(),
+    level,
+    line: redactSecrets(line),
+    userId: userId ?? "system",
+  };
+  state.logs.push(entry);
   const maxLines = CONSOLE_LOG_CONFIG.maxLines;
   if (state.logs.length > maxLines) {
     state.logs = state.logs.slice(-maxLines);
   }
-  state.emitter.emit("line", line);
+  state.emitter.emit("line", entry);
 }
 
 export function initConsoleLogCapture() {
@@ -65,7 +102,7 @@ export function initConsoleLogCapture() {
   for (const level of consoleLevels) {
     state.originals[level] = console[level];
     console[level] = (...args) => {
-      appendLine(toLogLine(level, args));
+      appendLine(level, toLogLine(level, args));
       state.originals[level](...args);
     };
   }
@@ -73,7 +110,15 @@ export function initConsoleLogCapture() {
   state.patched = true;
 }
 
-export function getConsoleLogs() {
+/**
+ * Lấy console logs. Trong SaaS mode, admin có thể filter theo userId.
+ * @param {{ userId?: string|number }} [opts]
+ * @returns {Array<{ts:number, level:string, line:string, userId:string|number}>}
+ */
+export function getConsoleLogs(opts) {
+  if (opts?.userId != null) {
+    return state.logs.filter(e => e.userId == opts.userId);
+  }
   return state.logs;
 }
 

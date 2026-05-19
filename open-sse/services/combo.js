@@ -4,12 +4,18 @@
 
 import { checkFallbackError, formatRetryAfter } from "./accountFallback.js";
 import { unavailableResponse } from "../utils/error.js";
+import { getTenantScopedCache } from "../utils/tenantCache.js";
+
+// P09 (#21): comboRotationState scoped per-tenant qua tenantCache helper.
+// Trước đây shared cross-tenant → user A round-robin ảnh hưởng user B.
 
 /**
- * Track rotation state per combo (for round-robin strategy)
- * @type {Map<string, { index: number, consecutiveUseCount: number }>}
+ * Get per-tenant rotation state Map (scoped by userId from ALS context).
+ * @returns {Map<string, { index: number, consecutiveUseCount: number }>}
  */
-const comboRotationState = new Map();
+function getComboState() {
+  return getTenantScopedCache("combo-rotation");
+}
 
 function normalizeStickyLimit(stickyLimit) {
   const parsed = Number.parseInt(stickyLimit, 10);
@@ -40,7 +46,8 @@ export function getRotatedModels(models, comboName, strategy, stickyLimit = 1) {
 
   const rotationKey = comboName || "__default__";
   const normalizedStickyLimit = normalizeStickyLimit(stickyLimit);
-  const existingState = comboRotationState.get(rotationKey);
+  const comboState = getComboState();
+  const existingState = comboState.get(rotationKey);
   const state = typeof existingState === "number"
     ? { index: existingState, consecutiveUseCount: 0 }
     : (existingState || { index: 0, consecutiveUseCount: 0 });
@@ -50,12 +57,12 @@ export function getRotatedModels(models, comboName, strategy, stickyLimit = 1) {
   const nextUseCount = state.consecutiveUseCount + 1;
 
   if (nextUseCount >= normalizedStickyLimit) {
-    comboRotationState.set(rotationKey, {
+    comboState.set(rotationKey, {
       index: (currentIndex + 1) % models.length,
       consecutiveUseCount: 0,
     });
   } else {
-    comboRotationState.set(rotationKey, {
+    comboState.set(rotationKey, {
       index: currentIndex,
       consecutiveUseCount: nextUseCount,
     });
@@ -69,8 +76,9 @@ export function getRotatedModels(models, comboName, strategy, stickyLimit = 1) {
  * @param {string} [comboName] - Combo name to reset; omit to clear all
  */
 export function resetComboRotation(comboName) {
-  if (comboName) comboRotationState.delete(comboName);
-  else comboRotationState.clear();
+  const comboState = getComboState();
+  if (comboName) comboState.delete(comboName);
+  else comboState.clear();
 }
 
 /**

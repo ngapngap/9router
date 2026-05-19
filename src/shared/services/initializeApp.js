@@ -18,6 +18,9 @@ import {
 } from "@/lib/tunnel/tunnelConfig";
 import { getMitmStatus, startMitm, loadEncryptedPassword, initDbHooks, restoreToolDNS, removeAllDNSEntriesSync } from "@/mitm/manager";
 import { syncToJson as syncMitmAliasCache } from "@/lib/mitmAliasCache";
+// P09 (#21): startup + watchdog/network timers chạy ngoài tenant context, cần
+// runAsSystem để getAdapter()/getSettings() được phép fallback default adapter.
+import { runAsSystem } from "@/lib/saas/tenantContext.js";
 
 // Inject correct paths and DB hooks into manager.js (CJS) from ESM context
 (function bootstrapMitm() {
@@ -182,9 +185,12 @@ async function safeRestartTailscale(reason) {
 
 function startWatchdog() {
   if (g.watchdogInterval) return;
+  // P09 (#21): system caller — không có tenant context, runAsSystem để getAdapter() fallback OK.
   g.watchdogInterval = setInterval(() => {
-    safeRestartTunnel("watchdog").catch(() => {});
-    safeRestartTailscale("watchdog").catch(() => {});
+    runAsSystem(() => {
+      safeRestartTunnel("watchdog").catch(() => {});
+      safeRestartTailscale("watchdog").catch(() => {});
+    });
   }, WATCHDOG_INTERVAL_MS);
   if (g.watchdogInterval.unref) g.watchdogInterval.unref();
 }
@@ -212,38 +218,41 @@ function startNetworkMonitor() {
   g.lastWatchdogTick = Date.now();
   g.lastOnline = null;
 
-  g.networkMonitorInterval = setInterval(async () => {
-    try {
-      const now = Date.now();
-      const elapsed = now - g.lastWatchdogTick;
-      g.lastWatchdogTick = now;
+  // P09 (#21): system caller — không có tenant context, runAsSystem để getAdapter() fallback OK.
+  g.networkMonitorInterval = setInterval(() => {
+    runAsSystem(async () => {
+      try {
+        const now = Date.now();
+        const elapsed = now - g.lastWatchdogTick;
+        g.lastWatchdogTick = now;
 
-      const currentFingerprint = getNetworkFingerprint();
-      const networkChanged = currentFingerprint !== g.lastNetworkFingerprint;
-      const wasSleep = elapsed > NETWORK_CHECK_INTERVAL_MS * 6;
-      if (networkChanged) g.lastNetworkFingerprint = currentFingerprint;
+        const currentFingerprint = getNetworkFingerprint();
+        const networkChanged = currentFingerprint !== g.lastNetworkFingerprint;
+        const wasSleep = elapsed > NETWORK_CHECK_INTERVAL_MS * 6;
+        if (networkChanged) g.lastNetworkFingerprint = currentFingerprint;
 
-      // Real reachability check (TCP 1.1.1.1:443) — not just interface presence
-      const online = await checkInternet();
-      const wasOffline = g.lastOnline === false;
-      g.lastOnline = online;
+        // Real reachability check (TCP 1.1.1.1:443) — not just interface presence
+        const online = await checkInternet();
+        const wasOffline = g.lastOnline === false;
+        g.lastOnline = online;
 
-      if (!online) return; // no internet → idle, don't restart
+        if (!online) return; // no internet → idle, don't restart
 
-      const onlineEdge = wasOffline; // offline → online transition
-      if (!networkChanged && !wasSleep && !onlineEdge) return;
+        const onlineEdge = wasOffline; // offline → online transition
+        if (!networkChanged && !wasSleep && !onlineEdge) return;
 
-      // Wait for DHCP/DNS to settle before probing
-      await new Promise((r) => setTimeout(r, NETWORK_SETTLE_MS));
+        // Wait for DHCP/DNS to settle before probing
+        await new Promise((r) => setTimeout(r, NETWORK_SETTLE_MS));
 
-      const reason = onlineEdge ? "online"
-        : wasSleep && networkChanged ? "sleep+netchange"
-        : wasSleep ? "sleep" : "netchange";
-      safeRestartTunnel(reason).catch(() => {});
-      safeRestartTailscale(reason).catch(() => {});
-    } catch (err) {
-      console.log("[NetworkMonitor] error:", err.message);
-    }
+        const reason = onlineEdge ? "online"
+          : wasSleep && networkChanged ? "sleep+netchange"
+          : wasSleep ? "sleep" : "netchange";
+        safeRestartTunnel(reason).catch(() => {});
+        safeRestartTailscale(reason).catch(() => {});
+      } catch (err) {
+        console.log("[NetworkMonitor] error:", err.message);
+      }
+    });
   }, NETWORK_CHECK_INTERVAL_MS);
 
   if (g.networkMonitorInterval.unref) g.networkMonitorInterval.unref();

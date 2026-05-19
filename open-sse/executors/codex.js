@@ -6,10 +6,15 @@ import { normalizeResponsesInput } from "../translator/helpers/responsesApiHelpe
 import { fetchImageAsBase64 } from "../translator/helpers/imageHelper.js";
 import { getModelUpstreamId } from "../config/providerModels.js";
 import { getConsistentMachineId } from "../../src/shared/utils/machineId.js";
+import { getTenantScopedCache } from "../utils/tenantCache.js";
+import { getTenantUserId } from "@/lib/saas/tenantContext.js";
 
-// In-memory map: hash(machineId + first assistant content) → { sessionId, lastUsed }
-const SESSION_TTL_MS = 60 * 60 * 1000; // 1 hour
-const assistantSessionMap = new Map();
+// P09 (#21): assistantSessionMap scoped per-tenant qua tenantCache.
+// cachedMachineId giữ nguyên (singleton system-wide, không per-user).
+// machineId giống nhau cho mọi user (cùng host) → hash(machineId+content) collision cross-tenant.
+function getAssistantSessionMap(userId) {
+  return getTenantScopedCache("codex-assistant-session", userId);
+}
 
 // Cache machine ID at module level (resolved once)
 let cachedMachineId = null;
@@ -49,25 +54,17 @@ function resolveConversationSessionId(input, machineId) {
   if (!text) return machineSessionId;
 
   const hash = hashContent((machineId || "") + text);
-  const entry = assistantSessionMap.get(hash);
+  const sessionMap = getAssistantSessionMap(getTenantUserId());
+  const entry = sessionMap.get(hash);
   if (entry) {
     entry.lastUsed = Date.now();
     return entry.sessionId;
   }
 
-
   const sessionId = generateSessionId();
-  assistantSessionMap.set(hash, { sessionId, lastUsed: Date.now() });
+  sessionMap.set(hash, { sessionId, lastUsed: Date.now() });
   return sessionId;
 }
-
-// Cleanup expired entries periodically
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, entry] of assistantSessionMap) {
-    if (now - entry.lastUsed > SESSION_TTL_MS) assistantSessionMap.delete(key);
-  }
-}, 10 * 60 * 1000);
 
 /**
  * Codex Executor - handles OpenAI Codex API (Responses API format)
