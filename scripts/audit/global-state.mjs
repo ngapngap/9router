@@ -54,6 +54,71 @@ const EXEMPT = [
     cache: /scopedStore/,
     reason: "tenantCache helper bản thân — keyed by (scope, userId)",
   },
+  {
+    file: /src\/app\/api\/usage\/(chart|stats)\/route\.js$/,
+    cache: /VALID_PERIODS/,
+    reason: "frozen Set of allowed period strings (config constant, no user data)",
+  },
+  {
+    file: /src\/lib\/tunnel\/cloudflared\.js$/,
+    cache: /QUICK_TUNNEL_PROTOCOLS/,
+    reason: "frozen Set of protocol names (config constant)",
+  },
+  {
+    file: /src\/mitm\/handlers\/base\.js$/,
+    cache: /STRIP_HEADERS/,
+    reason: "frozen Set of header names to strip (config constant)",
+  },
+  {
+    file: /src\/shared\/constants\/models\.js$/,
+    cache: /PASSTHROUGH_PROVIDERS/,
+    reason: "frozen Set of provider names (config constant)",
+  },
+  {
+    file: /src\/sse\/handlers\/imageGeneration\.js$/,
+    cache: /NO_AUTH_PROVIDERS/,
+    reason: "frozen Set of provider names (config constant)",
+  },
+  {
+    file: /src\/sse\/handlers\/(stt|tts)\.js$/,
+    cache: /CREDENTIALED_PROVIDERS/,
+    reason: "frozen Set of provider names (config constant)",
+  },
+  {
+    file: /open-sse\/config\/appConstants\.js$/,
+    cache: /CC_DEFAULT_TOOLS|AG_DEFAULT_TOOLS/,
+    reason: "frozen Set of tool names (config constant)",
+  },
+  {
+    file: /open-sse\/executors\/opencode-go\.js$/,
+    cache: /CLAUDE_FORMAT_MODELS/,
+    reason: "frozen Set of model names (config constant)",
+  },
+  {
+    file: /open-sse\/executors\/opencode\.js$/,
+    cache: /MESSAGES_MODELS/,
+    reason: "frozen Set of model names (config constant)",
+  },
+  {
+    file: /open-sse\/handlers\/imageProviders\/cloudflareAi\.js$/,
+    cache: /MULTIPART_MODELS/,
+    reason: "frozen Set of model names (config constant)",
+  },
+  {
+    file: /open-sse\/handlers\/search\/index\.js$/,
+    cache: /NON_RETRIABLE/,
+    reason: "frozen Set of error codes (config constant)",
+  },
+  {
+    file: /open-sse\/translator\/helpers\/claudeHelper\.js$/,
+    cache: /CLAUDE_FORMAT_PROVIDERS_WITHOUT_OUTPUT_CONFIG/,
+    reason: "frozen Set of provider names (config constant)",
+  },
+  {
+    file: /open-sse\/utils\/cursorProtobuf\.js$/,
+    cache: /KNOWN_RESPONSE_FIELDS/,
+    reason: "frozen Set of protobuf field names (config constant)",
+  },
 ];
 
 // OK whitelist (đã verify keyed by userId hoặc credential hash)
@@ -62,6 +127,31 @@ const OK = [
     file: /src\/lib\/db\/repos\/usageRepo\.js$/,
     cache: /^(pendingRequestsByUser|lastErrorProviderByUser|pendingTimersByUser|recentRingByUser|connectionMapCacheByUser)$/,
     reason: "P09 sub-wave C — Map<userId, State>, resolve qua _resolveUserId() (ALS hoặc opts.userId)",
+  },
+  {
+    file: /src\/lib\/rateLimit\.js$/,
+    cache: /^store$/,
+    reason: "P09 refactored: key = userId|ip|route (per-tenant keying)",
+  },
+  {
+    file: /src\/mitm\/server\.js$/,
+    cache: /certCache/,
+    reason: "MITM disabled in SaaS mode (404 guard); self-host only, single-user",
+  },
+  {
+    file: /open-sse\/handlers\/ttsProviders\/elevenlabs\.js$/,
+    cache: /_voicesCache/,
+    reason: "keyed by API key (unique per user credential); no cross-tenant leak",
+  },
+  {
+    file: /open-sse\/services\/tokenRefresh\.js$/,
+    cache: /refreshPromiseCache/,
+    reason: "keyed by provider:refreshToken (unique per credential); dedup only",
+  },
+  {
+    file: /open-sse\/services\/tokenRefresh\.js$/,
+    cache: /vertexTokenCache/,
+    reason: "keyed by credentials hash (unique per user service account)",
   },
 ];
 
