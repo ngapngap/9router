@@ -65,21 +65,22 @@ function isPublicSaasApiPath(pathname) {
 export async function proxy(request) {
   const { pathname } = request.nextUrl;
 
-  // Public paths: no auth required, return immediately (also prevents body consumption)
+  // Public paths: no auth required
   if (isPublicSaasApiPath(pathname)) {
-    // DEBUG: check if body is available in proxy for public POST paths
-    if (request.method === "POST") {
+    if (request.method === "POST" || request.method === "PUT" || request.method === "PATCH") {
       try {
         const cloned = request.clone();
         const bodyText = await cloned.text();
-        console.log("[proxy-debug] public POST body available:", bodyText.length > 0, "len:", bodyText.length);
         if (bodyText) {
-          const headers = new Headers(request.headers);
-          headers.set("x-body-raw", bodyText);
-          return NextResponse.next({ request: { headers } });
+          // Forward body via request header since Next.js 16 proxy consumes body stream
+          const requestHeaders = new Headers(request.headers);
+          requestHeaders.set("x-body-raw", bodyText);
+          return NextResponse.next({
+            headers: requestHeaders,
+          });
         }
       } catch (e) {
-        console.log("[proxy-debug] clone/read error:", e.message);
+        console.log("[proxy] body forward error:", e.message);
       }
     }
     return NextResponse.next();
