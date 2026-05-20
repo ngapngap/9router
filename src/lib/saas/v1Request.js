@@ -1,3 +1,9 @@
+import { createRateLimiter } from "@/lib/rateLimit.js";
+
+// P12 (#24) HIGH-6: rate limit per apiKeyId/userId — 60 req/min configurable
+const BEARER_RL_PER_MIN = Number(process.env.SAAS_BEARER_RATE_LIMIT_PER_MIN) || 60;
+const bearerLimiter = createRateLimiter({ windowMs: 60_000, maxRequests: BEARER_RL_PER_MIN });
+
 /**
  * Wrap v1 handlers so AsyncLocalStorage tenant tồn tại trước khi validateApiKey gắn userId.
  * @template T
@@ -47,6 +53,18 @@ export async function runV1WithBearerAuth(request, inner) {
           { status: 402, headers: { "Access-Control-Allow-Origin": "*" } },
         );
       }
+    }
+
+    // P12 (#24) HIGH-6: rate limit per userId for Bearer auth
+    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+    const rlKey = `bearer|${userId ?? "anon"}|${ip}`;
+    const rl = bearerLimiter(rlKey);
+    if (!rl.allowed) {
+      const retryAfter = Math.ceil((rl.resetMs - Date.now()) / 1000);
+      return Response.json(
+        { error: { code: "rate_limited", message: "Too many requests", retry_after: retryAfter } },
+        { status: 429, headers: { "Access-Control-Allow-Origin": "*", "Retry-After": String(retryAfter) } },
+      );
     }
 
     return inner();

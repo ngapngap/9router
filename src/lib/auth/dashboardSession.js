@@ -1,8 +1,25 @@
 import { SignJWT, jwtVerify } from "jose";
 
-const SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || "9router-default-secret-change-me"
-);
+// P12 (#24) HIGH-1: Throw nếu JWT_SECRET missing trong production.
+// Fallback hardcode "9router-default-secret-change-me" cho dev mode only.
+// Skip check during Next.js build phase (page data collection runs module top-level).
+const JWT_SECRET_RAW = process.env.JWT_SECRET;
+const isNextBuild = process.env.NEXT_PHASE === "phase-production-build";
+if (!JWT_SECRET_RAW && process.env.NODE_ENV === "production" && !isNextBuild) {
+  throw new Error(
+    "[SECURITY] JWT_SECRET env is required in production. " +
+    "Set a strong random secret (>= 32 chars). " +
+    "Refs: https://github.com/ngapngap/9router/issues/24"
+  );
+}
+if (!JWT_SECRET_RAW && !isNextBuild) {
+  console.warn("[SECURITY] JWT_SECRET not set — using insecure default. DO NOT use in production.");
+}
+const SECRET = new TextEncoder().encode(JWT_SECRET_RAW || "9router-default-secret-change-me");
+
+// P12 (#24) MED-4: bind issuer/audience để chống cross-instance reuse.
+const JWT_ISSUER = "9router-saas";
+const JWT_AUDIENCE = process.env.SAAS_JWT_AUDIENCE || "9router-dashboard";
 
 function getJwtExpirationTime() {
   if (process.env.SAAS_ENABLED === "true") {
@@ -23,6 +40,8 @@ export async function createDashboardAuthToken(claims = {}) {
   return new SignJWT({ authenticated: true, ...claims })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
+    .setIssuer(JWT_ISSUER)
+    .setAudience(JWT_AUDIENCE)
     .setExpirationTime(getJwtExpirationTime())
     .sign(SECRET);
 }
@@ -30,7 +49,10 @@ export async function createDashboardAuthToken(claims = {}) {
 export async function verifyDashboardAuthToken(token) {
   if (!token) return false;
   try {
-    await jwtVerify(token, SECRET);
+    await jwtVerify(token, SECRET, {
+      issuer: JWT_ISSUER,
+      audience: JWT_AUDIENCE,
+    });
     return true;
   } catch {
     return false;
@@ -40,7 +62,10 @@ export async function verifyDashboardAuthToken(token) {
 export async function getDashboardAuthSession(token) {
   if (!token) return null;
   try {
-    const { payload } = await jwtVerify(token, SECRET);
+    const { payload } = await jwtVerify(token, SECRET, {
+      issuer: JWT_ISSUER,
+      audience: JWT_AUDIENCE,
+    });
     return payload;
   } catch {
     return null;

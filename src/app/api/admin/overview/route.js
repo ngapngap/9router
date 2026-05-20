@@ -6,11 +6,22 @@ import { getUserAccountById, listUsersAdmin, countUsersAdmin } from "@/lib/saas/
 import { computeIsAdmin } from "@/lib/saas/adminPolicy.js";
 import { getUserDataDir } from "@/lib/saas/userDataRoot.js";
 import { writeAuditLog } from "@/lib/saas/auditLog.js";
+import { createRateLimiter } from "@/lib/rateLimit.js";
+
+// P12 (#24) MED-6: admin overview rate limit 30req/min per IP
+const adminLimiter = createRateLimiter({ windowMs: 60_000, maxRequests: 30 });
 
 /**
  * GET /api/admin/overview — chỉ admin SaaS; tổng quan user + kích thước store SQLite.
  */
 export async function GET(request) {
+  // P12 (#24) MED-6: rate limit admin endpoint
+  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  const rl = adminLimiter(`admin|${ip}`);
+  if (!rl.allowed) {
+    return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
+  }
+
   if (process.env.SAAS_ENABLED !== "true") {
     return NextResponse.json({ error: "not_saas" }, { status: 404 });
   }

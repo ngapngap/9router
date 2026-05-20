@@ -59,7 +59,7 @@ PUBLIC.md
 Thanks.md
 PUBLIC.en.md
 PR/*
-package-lock.json
+# package-lock.json  # P12: now tracked
 
 
 #Ignore vscode AI rules
