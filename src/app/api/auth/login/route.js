@@ -45,10 +45,13 @@ async function handleSaasLogin(request, body) {
     return NextResponse.json({ error: "Password login is disabled. Use OIDC sign in." }, { status: 403 });
   }
 
-  const identifier = typeof body.identifier === "string" ? body.identifier.trim() : "";
+  // Support both "identifier" and "username" field names (frontend compat)
+  const identifier = (typeof body.identifier === "string" ? body.identifier : typeof body.username === "string" ? body.username : "").trim();
   const password = typeof body.password === "string" ? body.password : "";
 
   if (!identifier || !password) {
+    // P09 debug: log when body parse seems empty (proxy body consumption issue)
+    console.warn("[login] empty identifier/password — body keys:", Object.keys(body || {}));
     return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
   }
 
