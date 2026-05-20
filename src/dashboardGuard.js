@@ -65,7 +65,13 @@ function isPublicSaasApiPath(pathname) {
 export async function proxy(request) {
   const { pathname } = request.nextUrl;
 
-  if (process.env.SAAS_ENABLED === "true" && pathname.startsWith("/api/") && !isPublicSaasApiPath(pathname)) {
+  // P09 fix: return immediately for public paths to prevent Next.js 16 proxy
+  // from consuming request body before route handler can read it.
+  if (isPublicSaasApiPath(pathname)) {
+    return NextResponse.next();
+  }
+
+  if (process.env.SAAS_ENABLED === "true" && pathname.startsWith("/api/")) {
     const cliTok = process.env.CLI_TOKEN_9R?.trim();
     if (cliTok && request.headers.get(CLI_TOKEN_HEADER) === cliTok) {
       return NextResponse.next();
