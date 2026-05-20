@@ -65,24 +65,6 @@ function isPublicSaasApiPath(pathname) {
 export async function proxy(request) {
   const { pathname } = request.nextUrl;
 
-  // Next.js 16 proxy convention consumes request body stream.
-  // For POST/PUT/PATCH to public API paths, read body and forward via header
-  // so route handler can recover it.
-  const method = request.method?.toUpperCase();
-  if (isPublicSaasApiPath(pathname) || !pathname.startsWith("/api/")) {
-    if (["POST", "PUT", "PATCH"].includes(method) && pathname.startsWith("/api/")) {
-      try {
-        const body = await request.text();
-        if (body) {
-          const headers = new Headers(request.headers);
-          headers.set("x-body-raw", body);
-          return NextResponse.next({ request: { headers } });
-        }
-      } catch {}
-    }
-    return NextResponse.next();
-  }
-
   if (process.env.SAAS_ENABLED === "true") {
     const cliTok = process.env.CLI_TOKEN_9R?.trim();
     if (cliTok && request.headers.get(CLI_TOKEN_HEADER) === cliTok) {
@@ -185,7 +167,8 @@ export const config = {
   matcher: [
     "/",
     "/dashboard/:path*",
-    "/api/:path*",
+    // Exclude public API paths that need POST body (proxy consumes body stream)
+    "/api/((?!auth/|v1/|v1beta/|health).*)",
   ],
 };
 
