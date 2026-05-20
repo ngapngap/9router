@@ -167,8 +167,24 @@ export const config = {
   matcher: [
     "/",
     "/dashboard/:path*",
-    // Exclude public API paths that need POST body (proxy consumes body stream)
-    "/api/((?!auth/|v1/|v1beta/|health).*)",
+    "/api/settings/:path*",
+    "/api/keys/:path*",
+    "/api/providers/:path*",
+    "/api/provider-nodes/:path*",
+    "/api/combos/:path*",
+    "/api/models/:path*",
+    "/api/proxy-pools/:path*",
+    "/api/tunnel/:path*",
+    "/api/translator/:path*",
+    "/api/cli-tools/:path*",
+    "/api/mcp/:path*",
+    "/api/oauth/:path*",
+    "/api/cloud/:path*",
+    "/api/admin/:path*",
+    "/api/shutdown",
+    "/api/version/:path*",
+    "/api/account/:path*",
+    "/api/usage/:path*",
   ],
 };
 
