@@ -1,6 +1,6 @@
 # LLM AI Router (SaaS) — MASTER PROJECT PLAN
 
-Last reviewed: 2026-05-19 — Baseline P00–P08 đã hoàn thành; SaaS Hardening P09–P11 + Security baseline P12 đang triển khai.
+Last reviewed: 2026-05-20 — Baseline P00–P08 đã hoàn thành; SaaS Hardening P09–P11 + Security baseline P12 đang triển khai.
 
 File này là **nguồn sự thật** cho triển khai fork **ngapngap/9router** hướng SaaS: **chỉ đọc** PostgreSQL New-API (DB `new-api`); giao diện **llmairouter.com**; **không** đăng ký; **không** đổi mật khẩu trong app (khác 9router gốc); user **cô lập** hoàn toàn (chỉ config/metadata của mình); export kiểu db.json **theo user**; **sys admin** xem tổng quan tenant (pha 08, DESIGN **§6**); preset **Ramclouds** trên Providers (DESIGN **§7**).
 
@@ -139,25 +139,25 @@ Một plan được coi là **đủ** khi:
 | P08.1 | `SAAS_ADMIN_ROLE_VALUES` + `SAAS_ADMIN_FALLBACK_USER_ID` (numeric validation) | [x] |
 | P08.2 | Admin UI: KPI 3 thẻ, toolbar, cột role/status/mtime, `totalUsersInDb` | [x] |
 | P08.3 | Audit log module `src/lib/saas/auditLog.js` + tích hợp admin overview | [x] |
-| P09 | Multi-tenant isolation hardening (driver fallback, `usageRepo`, `consoleLogBuffer`, `rateLimit`, `open-sse` caches) | [ ] |
-| P09.1 | `runAsSystem` whitelist + hostile-tenant integration test | [ ] |
-| P09.2 | Audit script `scripts/audit/global-state.mjs` báo 0 global cache | [ ] |
-| P10 | Backup + health check + audit log mở rộng + runbook on-call | [ ] |
-| P10.1 | Backup script + restore drill quarterly + retention 7d/4w/3m + encrypt | [ ] |
-| P10.2 | Health check `/api/health` deep (Postgres + DATA_DIR + disk) trả 503 khi fail | [ ] |
-| P10.3 | Audit log thêm 6 event (settings.save, connection.add/remove, apiKey.rotate, quota.exhausted/overrun, login.failed) | [ ] |
-| P11 | Admin operability: CLI scripts + feature flag env-only + quota guard edge | [ ] |
-| P11.1 | 5 CLI scripts (disable/enable user, audit-query, usage-report, reset-password) + dry-run + audit | [ ] |
-| P11.2 | Quota guard pre-flight 402 trước upstream + streaming overrun audit | [ ] |
-| P11.3 | `.env.example` cập nhật đủ 6 nhóm env (Identity/Admin/Console-audit/Backup/Quota/Cache strict) | [ ] |
-| P12 | Security baseline (CI/web/JWT/CSRF) | [ ] |
-| P12.1 | HIGH-1: JWT_SECRET throw nếu missing trong production (bỏ fallback hardcode) | [ ] |
-| P12.2 | HIGH-2: Trivy CI fail-on-CRITICAL + HIGH-3: pin third-party actions SHA | [ ] |
-| P12.3 | HIGH-4: package-lock.json tracked + CI dùng `npm ci` | [ ] |
-| P12.4 | HIGH-5: 6 security header trong `next.config.mjs` (CSP, HSTS, XFO, XCTO, Referrer, Permissions) | [ ] |
-| P12.5 | HIGH-6: rate limit `/api/v1/*` Bearer per `apiKeyId` | [ ] |
-| P12.6 | HIGH-7: redactSecrets helper + lint rule cho `console.error` upstream | [ ] |
-| P12.7 | MED: CSRF double-submit + JWT aud/iss + error.message wrap (24 routes) + admin/login RL + npm audit CI | [ ] |
+| P09 | Multi-tenant isolation hardening (driver fallback, `usageRepo`, `consoleLogBuffer`, `rateLimit`, `open-sse` caches) | [x] |
+| P09.1 | `runAsSystem` whitelist + hostile-tenant integration test | [x] |
+| P09.2 | Audit script `scripts/audit/global-state.mjs` báo 0 global cache | [x] |
+| P10 | Backup + health check + audit log mở rộng + runbook on-call | [x] |
+| P10.1 | Backup script + restore drill quarterly + retention 7d/4w/3m + encrypt | [x] |
+| P10.2 | Health check `/api/health` deep (Postgres + DATA_DIR + disk) trả 503 khi fail | [x] |
+| P10.3 | Audit log thêm 6 event (settings.save, connection.add/remove, apiKey.rotate, quota.exhausted/overrun, login.failed) | [x] |
+| P11 | Admin operability: CLI scripts + feature flag env-only + quota guard edge | [x] |
+| P11.1 | 5 CLI scripts (disable/enable user, audit-query, usage-report, reset-password) + dry-run + audit | [x] |
+| P11.2 | Quota guard pre-flight 402 trước upstream + streaming overrun audit | [x] |
+| P11.3 | `.env.example` cập nhật đủ 6 nhóm env (Identity/Admin/Console-audit/Backup/Quota/Cache strict) | [x] |
+| P12 | Security baseline (CI/web/JWT/CSRF) | [x] |
+| P12.1 | HIGH-1: JWT_SECRET throw nếu missing trong production (bỏ fallback hardcode) | [x] |
+| P12.2 | HIGH-2: Trivy CI fail-on-CRITICAL + HIGH-3: pin third-party actions SHA | [x] |
+| P12.3 | HIGH-4: package-lock.json tracked + CI dùng `npm ci` | [x] |
+| P12.4 | HIGH-5: 6 security header trong `next.config.mjs` (CSP, HSTS, XFO, XCTO, Referrer, Permissions) | [x] |
+| P12.5 | HIGH-6: rate limit `/api/v1/*` Bearer per `apiKeyId` | [x] |
+| P12.6 | HIGH-7: redactSecrets helper + lint rule cho `console.error` upstream | [x] |
+| P12.7 | MED: CSRF double-submit + JWT aud/iss + error.message wrap (24 routes) + admin/login RL + npm audit CI | [x] |
 
 ### Issue GitHub (pha đang làm)
 
