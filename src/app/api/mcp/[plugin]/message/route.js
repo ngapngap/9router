@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { sendToChild, findPlugin } from "@/lib/mcp/stdioSseBridge";
+import { respondWithError } from "@/lib/security/respondWithError.js";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,6 +15,6 @@ export async function POST(request, { params }) {
     sendToChild(plugin, body);
     return new Response(null, { status: 202 });
   } catch (e) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    return respondWithError(e, 500, "Internal server error");
   }
 }

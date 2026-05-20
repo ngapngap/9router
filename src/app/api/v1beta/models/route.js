@@ -1,4 +1,5 @@
 import { PROVIDER_MODELS } from "@/shared/constants/models";
+import { respondWithError } from "@/lib/security/respondWithError.js";
 
 /**
  * Handle CORS preflight
@@ -37,8 +38,7 @@ export async function GET() {
 
     return Response.json({ models });
   } catch (error) {
-    console.log("Error fetching models:", error);
-    return Response.json({ error: { message: error.message } }, { status: 500 });
+    return respondWithError(error, 500, "Failed to fetch models");
   }
 }
 

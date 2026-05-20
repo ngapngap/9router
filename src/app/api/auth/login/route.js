@@ -9,6 +9,7 @@ import { findUserForLogin } from "@/lib/saas/usersRepo.js";
 import { verifyPassword } from "@/lib/saas/password.js";
 import { computeIsAdmin } from "@/lib/saas/adminPolicy.js";
 import { checkRateLimit } from "@/lib/rateLimit.js";
+import { respondWithError } from "@/lib/security/respondWithError.js";
 
 function isTunnelRequest(request, settings) {
   const host = (request.headers.get("host") || "").split(":")[0].toLowerCase();
@@ -120,6 +121,6 @@ export async function POST(request) {
 
     return NextResponse.json({ error: "Invalid password" }, { status: 401 });
   } catch (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return respondWithError(error, 500, "Internal server error");
   }
 }

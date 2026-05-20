@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createProviderConnection } from "@/models";
+import { respondWithError } from "@/lib/security/respondWithError.js";
 
 const GITLAB_DEFAULT_BASE = "https://gitlab.com";
 
@@ -56,7 +57,6 @@ export async function POST(request) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("GitLab PAT auth error:", error?.message || error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return respondWithError(error, 500, "Internal server error");
   }
 }

@@ -7,6 +7,7 @@ import { getDashboardAuthSession } from "@/lib/auth/dashboardSession";
 import { getUserAccountById } from "@/lib/saas/usersRepo.js";
 import { computeIsAdmin } from "@/lib/saas/adminPolicy.js";
 import { cookies } from "next/headers";
+import { respondWithError } from "@/lib/security/respondWithError.js";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -47,8 +48,7 @@ export async function GET() {
       hasPassword: !!password
     }, { headers: SETTINGS_RESPONSE_HEADERS });
   } catch (error) {
-    console.error("Error getting settings:", error?.message || error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return respondWithError(error, 500, "Internal server error");
   }
 }
 
@@ -114,7 +114,6 @@ export async function PATCH(request) {
     safeSettings.oidcConfigured = !!(safeSettings.oidcIssuerUrl && safeSettings.oidcClientId && oidcClientSecret);
     return NextResponse.json(safeSettings, { headers: SETTINGS_RESPONSE_HEADERS });
   } catch (error) {
-    console.error("Error updating settings:", error?.message || error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return respondWithError(error, 500, "Internal server error");
   }
 }

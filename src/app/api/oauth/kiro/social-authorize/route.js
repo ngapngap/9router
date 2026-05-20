@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { generatePKCE } from "@/lib/oauth/utils/pkce";
 import { KiroService } from "@/lib/oauth/services/kiro";
+import { respondWithError } from "@/lib/security/respondWithError.js";
 
 /**
  * GET /api/oauth/kiro/social-authorize
@@ -37,7 +38,6 @@ export async function GET(request) {
       provider,
     });
   } catch (error) {
-    console.log("Kiro social authorize error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return respondWithError(error, 500, "Internal server error");
   }
 }

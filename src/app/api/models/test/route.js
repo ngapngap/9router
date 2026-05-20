@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getApiKeys } from "@/lib/localDb";
 import { UPDATER_CONFIG } from "@/shared/constants/config";
+import { respondWithError } from "@/lib/security/respondWithError.js";
 
 // POST /api/models/test - Ping a single model via internal completions or embeddings
 export async function POST(request) {
@@ -110,6 +111,6 @@ export async function POST(request) {
 
     return NextResponse.json({ ok: true, latencyMs, error: null, status: res.status });
   } catch (err) {
-    return NextResponse.json({ ok: false, error: err.message }, { status: 500 });
+    return respondWithError(err, 500, "Internal server error");
   }
 }

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createProviderConnection } from "@/models";
+import { respondWithError } from "@/lib/security/respondWithError.js";
 
 /**
  * iFlow Cookie-Based Authentication
@@ -131,7 +132,6 @@ export async function POST(request) {
       },
     });
   } catch (error) {
-    console.error("iFlow cookie auth error:", error?.message || error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return respondWithError(error, 500, "Internal server error");
   }
 }

@@ -14,6 +14,7 @@ import {
   getCodexSessionStatus,
   clearCodexSession,
 } from "@/lib/oauth/utils/server";
+import { respondWithError } from "@/lib/security/respondWithError.js";
 
 /**
  * Dynamic OAuth API Route
@@ -119,8 +120,7 @@ export async function GET(request, { params }) {
 
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   } catch (error) {
-    console.log("OAuth GET error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return respondWithError(error, 500, "Internal server error");
   }
 }
 
@@ -227,7 +227,6 @@ export async function POST(request, { params }) {
 
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   } catch (error) {
-    console.log("OAuth POST error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return respondWithError(error, 500, "Internal server error");
   }
 }
