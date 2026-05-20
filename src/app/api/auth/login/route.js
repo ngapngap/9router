@@ -83,7 +83,16 @@ async function handleSaasLogin(request, body) {
 
 export async function POST(request) {
   try {
-    const body = await request.json().catch(() => ({}));
+    // Next.js 16 proxy consumes body. Try x-body-raw header (set by proxy), fallback request.json()
+    let body = {};
+    try {
+      const rawFromProxy = request.headers.get("x-body-raw");
+      if (rawFromProxy) {
+        body = JSON.parse(rawFromProxy);
+      } else {
+        body = await request.json();
+      }
+    } catch { body = {}; }
 
   // P12 (#24) MED-5: rate limit login cho cả self-host + SaaS
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "unknown";

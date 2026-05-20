@@ -67,6 +67,21 @@ export async function proxy(request) {
 
   // Public paths: no auth required, return immediately (also prevents body consumption)
   if (isPublicSaasApiPath(pathname)) {
+    // DEBUG: check if body is available in proxy for public POST paths
+    if (request.method === "POST") {
+      try {
+        const cloned = request.clone();
+        const bodyText = await cloned.text();
+        console.log("[proxy-debug] public POST body available:", bodyText.length > 0, "len:", bodyText.length);
+        if (bodyText) {
+          const headers = new Headers(request.headers);
+          headers.set("x-body-raw", bodyText);
+          return NextResponse.next({ request: { headers } });
+        }
+      } catch (e) {
+        console.log("[proxy-debug] clone/read error:", e.message);
+      }
+    }
     return NextResponse.next();
   }
 
