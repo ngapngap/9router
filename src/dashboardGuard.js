@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSettings } from "@/lib/localDb";
 import { getConsistentMachineId } from "@/shared/utils/machineId";
 import { verifyDashboardAuthToken } from "@/lib/auth/dashboardSession";
+import { verifyCsrfToken } from "@/lib/security/csrfToken.js";
 
 const CLI_TOKEN_HEADER = "x-9r-cli-token";
 const CLI_TOKEN_SALT = "9r-cli-auth";
@@ -74,6 +75,11 @@ export async function proxy(request) {
     if (!(await verifyDashboardAuthToken(token))) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    // P12 (#24) MED-3: CSRF double-submit cookie check cho mutation requests
+    const csrf = verifyCsrfToken(request);
+    if (!csrf.valid) {
+      return NextResponse.json({ error: csrf.reason || "CSRF validation failed" }, { status: 403 });
+    }
     return NextResponse.next();
   }
 
@@ -87,8 +93,14 @@ export async function proxy(request) {
   // Protect sensitive API endpoints (allow CLI token, JWT, or requireLogin=false)
   if (PROTECTED_API_PATHS.some((p) => pathname.startsWith(p))) {
     if (pathname === "/api/settings/require-login") return NextResponse.next();
-    if (await hasValidCliToken(request) || await isAuthenticated(request))
+    if (await hasValidCliToken(request) || await isAuthenticated(request)) {
+      // P12 (#24) MED-3: CSRF check
+      const csrfCheck = verifyCsrfToken(request);
+      if (!csrfCheck.valid) {
+        return NextResponse.json({ error: csrfCheck.reason || "CSRF validation failed" }, { status: 403 });
+      }
       return NextResponse.next();
+    }
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
