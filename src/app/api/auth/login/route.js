@@ -50,8 +50,6 @@ async function handleSaasLogin(request, body) {
   const password = typeof body.password === "string" ? body.password : "";
 
   if (!identifier || !password) {
-    // P09 debug: log when body parse seems empty (proxy body consumption issue)
-    console.warn("[login] empty identifier/password — body keys:", Object.keys(body || {}));
     return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
   }
 
@@ -83,16 +81,7 @@ async function handleSaasLogin(request, body) {
 
 export async function POST(request) {
   try {
-    // Next.js 16 proxy consumes body. Try x-body-raw header (set by proxy), fallback request.json()
-    let body = {};
-    try {
-      const rawFromProxy = request.headers.get("x-body-raw");
-      if (rawFromProxy) {
-        body = JSON.parse(rawFromProxy);
-      } else {
-        body = await request.json();
-      }
-    } catch { body = {}; }
+    const body = await request.json().catch(() => ({}));
 
   // P12 (#24) MED-5: rate limit login cho cả self-host + SaaS
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "unknown";

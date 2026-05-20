@@ -65,24 +65,8 @@ function isPublicSaasApiPath(pathname) {
 export async function proxy(request) {
   const { pathname } = request.nextUrl;
 
-  // Public paths: no auth required
+  // Public paths: no auth required, pass through immediately
   if (isPublicSaasApiPath(pathname)) {
-    if (request.method === "POST" || request.method === "PUT" || request.method === "PATCH") {
-      try {
-        const cloned = request.clone();
-        const bodyText = await cloned.text();
-        if (bodyText) {
-          // Forward body via request header since Next.js 16 proxy consumes body stream
-          const requestHeaders = new Headers(request.headers);
-          requestHeaders.set("x-body-raw", bodyText);
-          return NextResponse.next({
-            headers: requestHeaders,
-          });
-        }
-      } catch (e) {
-        console.log("[proxy] body forward error:", e.message);
-      }
-    }
     return NextResponse.next();
   }
 
