@@ -3,8 +3,10 @@ import { cookies } from "next/headers";
 import { getSettings } from "@/lib/localDb";
 import { isOidcConfigured } from "@/lib/auth/oidc";
 import { getDashboardAuthSession } from "@/lib/auth/dashboardSession";
+// P09 (#21): public route reads global settings → use system context.
+import { withSystemContext } from "@/lib/security/saasContext.js";
 
-export async function GET() {
+async function handleGet() {
   try {
     const settings = await getSettings();
     const cookieStore = await cookies();
@@ -50,3 +52,5 @@ export async function GET() {
     });
   }
 }
+
+export const GET = withSystemContext(handleGet);

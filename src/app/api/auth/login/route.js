@@ -10,6 +10,10 @@ import { verifyPassword } from "@/lib/saas/password.js";
 import { computeIsAdmin } from "@/lib/saas/adminPolicy.js";
 import { checkRateLimit } from "@/lib/rateLimit.js";
 import { respondWithError } from "@/lib/security/respondWithError.js";
+// P09 (#21): wrap pre-auth getSettings() in runAsSystem — login route doesn't
+// know userId yet (chicken-and-egg). Settings table is server-wide (tunnel/OIDC
+// config), not per-tenant, so system context is the correct scope.
+import { runAsSystem } from "@/lib/saas/tenantContext.js";
 
 function isTunnelRequest(request, settings) {
   const host = (request.headers.get("host") || "").split(":")[0].toLowerCase();
@@ -31,7 +35,7 @@ async function handleSaasLogin(request, body) {
     return NextResponse.json({ error: "SaaS database not configured" }, { status: 503 });
   }
 
-  const settings = await getSettings();
+  const settings = await runAsSystem(() => getSettings());
 
   if (isTunnelRequest(request, settings) && settings.tunnelDashboardAccess !== true) {
     return NextResponse.json({ error: "Dashboard access via tunnel is disabled" }, { status: 403 });
@@ -90,7 +94,8 @@ export async function POST(request) {
   }
 
     const { password } = body;
-    const settings = await getSettings();
+    // P09 (#21): pre-auth call → no tenant context, wrap in runAsSystem.
+    const settings = await runAsSystem(() => getSettings());
 
     if (isTunnelRequest(request, settings) && settings.tunnelDashboardAccess !== true) {
       return NextResponse.json({ error: "Dashboard access via tunnel is disabled" }, { status: 403 });
