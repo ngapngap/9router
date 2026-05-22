@@ -51,8 +51,10 @@ export function verifyCsrfToken(request) {
     return { valid: true };
   }
 
-  // Check if CSRF protection is enabled
-  if (process.env.CSRF_PROTECTION_ENABLED === "false") {
+  // CSRF protection opt-in (default disabled until frontend integrates token flow).
+  // JWT cookie with SameSite=lax already protects against cross-site POST.
+  // Enable via CSRF_PROTECTION_ENABLED=true when frontend sends X-CSRF-Token header.
+  if (process.env.CSRF_PROTECTION_ENABLED !== "true") {
     return { valid: true };
   }
 
