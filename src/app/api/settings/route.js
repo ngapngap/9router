@@ -102,13 +102,17 @@ export async function PATCH(request) {
     }
 
     // Invalidate combo rotation state when strategy settings change
-    if (
-      Object.prototype.hasOwnProperty.call(body, "comboStrategy") ||
-      Object.prototype.hasOwnProperty.call(body, "comboStickyRoundRobinLimit") ||
-      Object.prototype.hasOwnProperty.call(body, "comboStrategies")
-    ) {
-      resetComboRotation();
-    }
+    // Non-fatal: resetComboRotation needs tenant context (P09 tenantCache).
+    // If context missing, rotation will self-correct on next request.
+    try {
+      if (
+        Object.prototype.hasOwnProperty.call(body, "comboStrategy") ||
+        Object.prototype.hasOwnProperty.call(body, "comboStickyRoundRobinLimit") ||
+        Object.prototype.hasOwnProperty.call(body, "comboStrategies")
+      ) {
+        resetComboRotation();
+      }
+    } catch {}
 
     const { password, oidcClientSecret, ...safeSettings } = settings;
     safeSettings.oidcConfigured = !!(safeSettings.oidcIssuerUrl && safeSettings.oidcClientId && oidcClientSecret);

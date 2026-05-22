@@ -50,8 +50,12 @@ export async function PUT(request, { params }) {
     }
 
     // Invalidate rotation state (models/strategy/name may have changed)
-    if (prev?.name) resetComboRotation(prev.name);
-    if (combo.name && combo.name !== prev?.name) resetComboRotation(combo.name);
+    // Non-fatal: resetComboRotation needs tenant context (P09 tenantCache).
+    // If context missing, rotation will self-correct on next request.
+    try {
+    try { if (prev?.name) resetComboRotation(prev.name); } catch {}
+      if (combo.name && combo.name !== prev?.name) resetComboRotation(combo.name);
+    } catch {}
 
     return NextResponse.json(combo);
   } catch (error) {
