@@ -2,24 +2,54 @@ import { v4 as uuidv4 } from "uuid";
 import { getAdapter } from "../driver.js";
 
 /**
- * SaaS mode: insert key vào Postgres tokens table để Bearer auth lookup hoạt động.
- * Postgres tokens table là nơi validateApiKey query khi SAAS_ENABLED=true.
+ * SaaS: scan all per-user SQLite DBs to find which user owns this API key.
+ * Uses in-memory cache to avoid repeated filesystem scans.
+ * Cache invalidated every 60s.
+ *
+ * @param {string} key — API key to find
+ * @returns {Promise<string|null>} userId or null
  */
-async function syncKeyToPostgres(key, name, userId) {
-  if (process.env.SAAS_ENABLED !== "true") return;
-  if (!userId) return;
-  try {
-    const { saasQuery } = await import("@/lib/saas/query.js");
-    await saasQuery(
-      `INSERT INTO public.tokens (user_id, key, name, status, created_time, accessed_time, expired_time)
-       VALUES ($1, $2, $3, 1, $4, $4, -1)
-       ON CONFLICT (key) DO NOTHING`,
-      [userId, key, name || "Dashboard API Key", Math.floor(Date.now() / 1000)]
-    );
-  } catch (e) {
-    console.warn("[apiKeysRepo] syncKeyToPostgres failed:", e.message);
-    // Non-fatal: key still works in SQLite for display, just won't auth via Bearer until synced
+const _keyOwnerCache = new Map(); // key -> { userId, ts }
+const KEY_CACHE_TTL = 60_000; // 60s
+
+async function findKeyOwnerAcrossUsers(key) {
+  // Check cache first
+  const cached = _keyOwnerCache.get(key);
+  if (cached && Date.now() - cached.ts < KEY_CACHE_TTL) {
+    return cached.userId;
   }
+
+  const { DATA_DIR } = await import("@/lib/dataDir.js");
+  const path = await import("node:path");
+  const fs = await import("node:fs");
+
+  const usersDir = path.join(DATA_DIR, "saas", "users");
+  let userDirs;
+  try {
+    userDirs = fs.readdirSync(usersDir).filter(d => /^\d+$/.test(d));
+  } catch {
+    return null; // saas/users dir doesn't exist yet
+  }
+
+  const { getAdapterForUser } = await import("../driver.js");
+
+  for (const uid of userDirs) {
+    try {
+      const db = await getAdapterForUser(uid);
+      const row = db.get(`SELECT isActive FROM apiKeys WHERE key = ?`, [key]);
+      if (row && (row.isActive === 1 || row.isActive === true)) {
+        _keyOwnerCache.set(key, { userId: uid, ts: Date.now() });
+        return uid;
+      }
+    } catch {
+      // Skip broken/unreadable user DBs
+      continue;
+    }
+  }
+
+  // Not found — cache negative result briefly (10s)
+  _keyOwnerCache.set(key, { userId: null, ts: Date.now() - KEY_CACHE_TTL + 10_000 });
+  return null;
 }
 
 function rowToKey(row) {
@@ -64,10 +94,6 @@ export async function createApiKey(name, machineId) {
     [apiKey.id, apiKey.key, apiKey.name, apiKey.machineId, 1, apiKey.createdAt]
   );
 
-  // SaaS: sync to Postgres for Bearer auth lookup
-  const { getTenantUserId } = await import("@/lib/saas/tenantContext.js");
-  await syncKeyToPostgres(apiKey.key, apiKey.name, getTenantUserId());
-
   return apiKey;
 }
 
@@ -91,20 +117,8 @@ export async function deleteApiKey(id) {
   const db = await getAdapter();
   const row = db.get(`SELECT key FROM apiKeys WHERE id = ?`, [id]);
   const res = db.run(`DELETE FROM apiKeys WHERE id = ?`, [id]);
-
-  // SaaS: soft-delete from Postgres too
-  if (row?.key && process.env.SAAS_ENABLED === "true") {
-    try {
-      const { saasQuery } = await import("@/lib/saas/query.js");
-      await saasQuery(
-        `UPDATE public.tokens SET deleted_at = NOW() WHERE TRIM(key::text) = $1`,
-        [row.key]
-      );
-    } catch (e) {
-      console.warn("[apiKeysRepo] deleteKeyFromPostgres failed:", e.message);
-    }
-  }
-
+  // Invalidate cache
+  if (row?.key) _keyOwnerCache.delete(row.key);
   return (res?.changes ?? 0) > 0;
 }
 
@@ -113,11 +127,11 @@ export async function validateApiKey(key) {
   if (!k) return false;
 
   if (process.env.SAAS_ENABLED === "true") {
-    const { findTokenByKeyForProxy } = await import("@/lib/saas/tokensRepo.js");
+    // SaaS: scan all per-user SQLite DBs to find key (keys stored in per-user SQLite only)
     const { setTenantUserId } = await import("@/lib/saas/tenantContext.js");
-    const row = await findTokenByKeyForProxy(k);
-    if (!row?.user_id) return false;
-    setTenantUserId(Number(row.user_id));
+    const userId = await findKeyOwnerAcrossUsers(k);
+    if (!userId) return false;
+    setTenantUserId(Number(userId));
     return true;
   }
 
