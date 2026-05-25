@@ -258,34 +258,48 @@ export async function GET(request, { params }) {
         baseUrl = baseUrl.slice(0, -9);
       }
 
-      const url = `${baseUrl}/models`;
-      const response = await fetch(url, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": connection.apiKey,
-          "anthropic-version": "2023-06-01",
-          "Authorization": `Bearer ${connection.apiKey}`
-        },
-      });
+      // Anthropic-compatible providers typically don't have /models endpoint.
+      // Validate key works by calling /messages with minimal request.
+      // If that succeeds, return empty models list (caller can use model IDs directly).
+      try {
+        const msgRes = await fetch(`${baseUrl}/messages`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": connection.apiKey,
+            "anthropic-version": "2023-06-01",
+          },
+          body: JSON.stringify({
+            model: "claude-3-haiku-20240307",
+            max_tokens: 1,
+            messages: [{ role: "user", content: "ping" }],
+          }),
+          signal: AbortSignal.timeout(10000),
+        });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.log(`Error fetching models from ${connection.provider}:`, errorText);
+        if (msgRes.status === 401 || msgRes.status === 403) {
+          return NextResponse.json({ error: "Invalid API key" }, { status: 401 });
+        }
+
+        if (!msgRes.ok) {
+          return NextResponse.json(
+            { error: `Failed to fetch models: ${msgRes.status}` },
+            { status: msgRes.status }
+          );
+        }
+
+        // Key is valid but provider has no models endpoint — return empty list
+        return NextResponse.json({
+          provider: connection.provider,
+          connectionId: connection.id,
+          models: [],
+        });
+      } catch (error) {
         return NextResponse.json(
-          { error: `Failed to fetch models: ${response.status}` },
-          { status: response.status }
+          { error: `Failed to fetch models: ${error.message}` },
+          { status: 500 }
         );
       }
-
-      const data = await response.json();
-      const models = data.data || data.models || [];
-
-      return NextResponse.json({
-        provider: connection.provider,
-        connectionId: connection.id,
-        models
-      });
     }
 
     // Kiro: Try dynamic model fetching first
