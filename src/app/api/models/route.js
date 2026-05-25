@@ -3,9 +3,12 @@ import { getModelAliases, setModelAlias } from "@/models";
 import { getDisabledModels } from "@/lib/disabledModelsDb";
 import { AI_MODELS } from "@/shared/constants/config";
 import { getProviderAlias } from "@/shared/constants/providers";
+import { withSystemContext } from "@/lib/security/saasContext.js";
+
+export const dynamic = "force-dynamic";
 
 // GET /api/models - Get models with aliases
-export async function GET() {
+export const GET = withSystemContext(async function handleGetModels() {
   try {
     const modelAliases = await getModelAliases();
     const disabled = await getDisabledModels();
@@ -30,10 +33,10 @@ export async function GET() {
     console.log("Error fetching models:", error);
     return NextResponse.json({ error: "Failed to fetch models" }, { status: 500 });
   }
-}
+});
 
 // PUT /api/models - Update model alias
-export async function PUT(request) {
+export const PUT = withSystemContext(async function handleUpdateModelAlias(request) {
   try {
     const body = await request.json();
     const { model, alias } = body;
@@ -44,7 +47,6 @@ export async function PUT(request) {
 
     const modelAliases = await getModelAliases();
 
-    // Check if alias already exists for different model
     const existingModel = Object.entries(modelAliases).find(
       ([key, val]) => val === alias && key !== model
     );
@@ -53,7 +55,6 @@ export async function PUT(request) {
       return NextResponse.json({ error: "Alias already in use" }, { status: 400 });
     }
 
-    // Update alias
     await setModelAlias(model, alias);
 
     return NextResponse.json({ success: true, model, alias });
@@ -61,4 +62,4 @@ export async function PUT(request) {
     console.log("Error updating alias:", error);
     return NextResponse.json({ error: "Failed to update alias" }, { status: 500 });
   }
-}
+});
