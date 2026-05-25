@@ -12,6 +12,8 @@ import { getAdapter } from "../driver.js";
 const _keyOwnerCache = new Map(); // key -> { userId, ts }
 const KEY_CACHE_TTL = 60_000; // 60s
 
+export { _keyOwnerCache, KEY_CACHE_TTL };
+
 async function findKeyOwnerAcrossUsers(key) {
   // Check cache first
   const cached = _keyOwnerCache.get(key);
