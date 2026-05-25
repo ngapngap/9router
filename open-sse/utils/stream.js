@@ -74,84 +74,67 @@ export function createSSEStream(options = {}) {
       for (const line of lines) {
         const trimmed = line.trim();
 
-        // Passthrough mode: normalize and forward
+        // Passthrough mode: forward SSE lines unchanged (format-agnostic)
         if (mode === STREAM_MODE.PASSTHROUGH) {
-          let output;
+          let output = null;
           let injectedUsage = false;
 
           if (trimmed.startsWith("data:") && trimmed.slice(5).trim() !== "[DONE]") {
             try {
               const parsed = JSON.parse(trimmed.slice(5).trim());
 
-              const idFixed = fixInvalidId(parsed);
-
-              // Ensure OpenAI-required fields are present on streaming chunks (Letta compat)
-              let fieldsInjected = false;
-              if (parsed.choices !== undefined) {
-                if (!parsed.object) { parsed.object = "chat.completion.chunk"; fieldsInjected = true; }
-                if (!parsed.created) { parsed.created = Math.floor(Date.now() / 1000); fieldsInjected = true; }
-              }
-
-              // Strip Azure-specific non-standard fields from streaming chunks
-              if (parsed.prompt_filter_results !== undefined) {
-                delete parsed.prompt_filter_results;
-                fieldsInjected = true;
-              }
-              if (parsed?.choices) {
-                for (const choice of parsed.choices) {
-                  if (choice.content_filter_results !== undefined) {
-                    delete choice.content_filter_results;
-                    fieldsInjected = true;
-                  }
-                }
-              }
-
-              if (!hasValuableContent(parsed, FORMATS.OPENAI)) {
-                continue;
-              }
-
-              const delta = parsed.choices?.[0]?.delta;
-              const content = delta?.content;
-              const reasoning = delta?.reasoning_content;
-              if (content && typeof content === "string") {
-                totalContentLength += content.length;
-                accumulatedContent += content;
-              }
-              if (reasoning && typeof reasoning === "string") {
-                totalContentLength += reasoning.length;
-                accumulatedThinking += reasoning;
-              }
-
+              // Extract usage if available (any format)
               const extracted = extractUsage(parsed);
               if (extracted) {
                 usage = extracted;
               }
 
-              const isFinishChunk = parsed.choices?.[0]?.finish_reason;
-              if (isFinishChunk && !hasValidUsage(parsed.usage)) {
-                const estimated = estimateUsage(body, totalContentLength, FORMATS.OPENAI);
-                parsed.usage = filterUsageForFormat(estimated, FORMATS.OPENAI);
-                output = `data: ${JSON.stringify(parsed)}\n`;
-                usage = estimated;
-                injectedUsage = true;
-              } else if (isFinishChunk && usage) {
-                const buffered = addBufferToUsage(usage);
-                parsed.usage = filterUsageForFormat(buffered, FORMATS.OPENAI);
-                output = `data: ${JSON.stringify(parsed)}\n`;
-                injectedUsage = true;
-              } else if (idFixed || fieldsInjected) {
-                output = `data: ${JSON.stringify(parsed)}\n`;
-                injectedUsage = true;
+              // Only do OpenAI-specific field injection/usage estimation for OpenAI-format chunks
+              const isOpenAIFormat = sourceFormat === FORMATS.OPENAI || (!sourceFormat && parsed.choices !== undefined);
+
+              if (isOpenAIFormat) {
+                const idFixed = fixInvalidId(parsed);
+                let fieldsInjected = false;
+                if (parsed.choices !== undefined) {
+                  if (!parsed.object) { parsed.object = "chat.completion.chunk"; fieldsInjected = true; }
+                  if (!parsed.created) { parsed.created = Math.floor(Date.now() / 1000); fieldsInjected = true; }
+                }
+                if (parsed.prompt_filter_results !== undefined) { delete parsed.prompt_filter_results; fieldsInjected = true; }
+                if (parsed?.choices) {
+                  for (const choice of parsed.choices) {
+                    if (choice.content_filter_results !== undefined) { delete choice.content_filter_results; fieldsInjected = true; }
+                  }
+                }
+                const delta = parsed.choices?.[0]?.delta;
+                if (delta?.content && typeof delta.content === "string") { totalContentLength += delta.content.length; accumulatedContent += delta.content; }
+                if (delta?.reasoning_content && typeof delta.reasoning === "string") { totalContentLength += delta.reasoning.length; accumulatedThinking += delta.reasoning; }
+                const isFinishChunk = parsed.choices?.[0]?.finish_reason;
+                if (isFinishChunk && !hasValidUsage(parsed.usage)) {
+                  const estimated = estimateUsage(body, totalContentLength, FORMATS.OPENAI);
+                  parsed.usage = filterUsageForFormat(estimated, FORMATS.OPENAI);
+                  output = `data: ${JSON.stringify(parsed)}\n`;
+                  usage = estimated;
+                  injectedUsage = true;
+                } else if (isFinishChunk && usage) {
+                  const buffered = addBufferToUsage(usage);
+                  parsed.usage = filterUsageForFormat(buffered, FORMATS.OPENAI);
+                  output = `data: ${JSON.stringify(parsed)}\n`;
+                  injectedUsage = true;
+                } else if (idFixed || fieldsInjected) {
+                  output = `data: ${JSON.stringify(parsed)}\n`;
+                  injectedUsage = true;
+                }
+              } else {
+                // Non-OpenAI format (Claude, etc.): forward as-is, no content filtering
+                // Usage already extracted above if present
               }
-            } catch { }
+            } catch {
+              // Parse failed — forward raw line as-is
+            }
           }
 
           if (!injectedUsage) {
-            if (line.startsWith("data:") && !line.startsWith("data: ")) {
-              output = "data: " + line.slice(5) + "\n";
-            } else {
-              output = line + "\n";
-            }
+            output = line + "\n";
           }
 
           reqLogger?.appendConvertedChunk?.(output);

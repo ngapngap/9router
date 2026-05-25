@@ -94,57 +94,42 @@ export async function POST(request) {
       });
     }
 
-    // Anthropic Compatible Validation
+    // Anthropic Compatible Validation — use POST /messages (Anthropic API has no /models endpoint)
     if (type === "anthropic-compatible") {
       let normalizedBase = baseUrl.trim().replace(/\/$/, "");
       if (normalizedBase.endsWith("/messages")) {
         normalizedBase = normalizedBase.slice(0, -9);
       }
 
-      const modelsUrl = `${normalizedBase}/models`;
-      const res = await fetchWithTimeout(modelsUrl, {
-        method: "GET",
+      // Direct validation via POST /messages with minimal payload
+      const msgRes = await fetchWithTimeout(`${normalizedBase}/messages`, {
+        method: "POST",
         headers: {
           "x-api-key": apiKey,
           "anthropic-version": "2023-06-01",
-          "Authorization": `Bearer ${apiKey}`
-        }
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: modelId?.trim() || "claude-3-haiku-20240307",
+          max_tokens: 1,
+          messages: [{ role: "user", content: "ping" }],
+        }),
       });
 
-      if (res.ok) return NextResponse.json({ valid: true });
+      if (msgRes.ok) {
+        return NextResponse.json({ valid: true, method: "messages" });
+      }
 
-      // Auth errors - no point trying chat fallback
-      if (res.status === 401 || res.status === 403) {
+      if (msgRes.status === 401 || msgRes.status === 403) {
         return NextResponse.json({ valid: false, error: "API key unauthorized" });
       }
 
-      // Fallback: try chat/completions if modelId provided
-      if (modelId) {
-        const chatRes = await fetchWithTimeout(`${normalizedBase}/chat/completions`, {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${apiKey}`,
-            "Content-Type": "application/json",
-            "x-api-key": apiKey,
-            "anthropic-version": "2023-06-01"
-          },
-          body: JSON.stringify({
-            model: modelId,
-            messages: [{ role: "user", content: "ping" }],
-            max_tokens: 1
-          })
-        });
-        if (chatRes.ok) {
-          return NextResponse.json({ valid: true, method: "chat" });
-        }
-        return NextResponse.json({
-          valid: false,
-          error: getChatErrorMessage(chatRes.status),
-          method: "chat"
-        });
-      }
-
-      return NextResponse.json({ valid: false, error: getModelsErrorMessage(res.status) });
+      const errBody = await msgRes.text().catch(() => "");
+      return NextResponse.json({
+        valid: false,
+        error: `Messages request failed (${msgRes.status})${errBody ? `: ${errBody.slice(0, 200)}` : ""}`,
+        method: "messages",
+      });
     }
 
     // OpenAI Compatible Validation (Default)
