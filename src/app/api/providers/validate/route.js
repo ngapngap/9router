@@ -7,6 +7,15 @@ import { openaiToCommandCode } from "open-sse/translator/request/openai-to-comma
 import { PROVIDER_ENDPOINTS } from "@/shared/constants/config";
 import { normalizeProviderId } from "@/lib/providerNormalization";
 
+const fetchWithTimeout = (url, options, timeout = 10000) => {
+  return Promise.race([
+    fetch(url, options),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Request timeout")), timeout)
+    )
+  ]);
+};
+
 // Probe a webSearch/webFetch provider using its searchConfig/fetchConfig.
 // Returns true if API key is accepted (status !== 401 && !== 403).
 async function probeWebProvider(provider, apiKey) {
@@ -153,20 +162,24 @@ export async function POST(request) {
 
         let normalizedBase = node.baseUrl?.trim().replace(/\/$/, "") || "";
         if (normalizedBase.endsWith("/messages")) {
-          normalizedBase = normalizedBase.slice(0, -9); // remove /messages
+          normalizedBase = normalizedBase.slice(0, -9);
         }
 
-        const modelsUrl = `${normalizedBase}/models`;
-
-        const res = await fetch(modelsUrl, {
+        const msgRes = await fetchWithTimeout(`${normalizedBase}/messages`, {
+          method: "POST",
           headers: {
             "x-api-key": apiKey,
             "anthropic-version": "2023-06-01",
-            "Authorization": `Bearer ${apiKey}`
+            "Content-Type": "application/json",
           },
+          body: JSON.stringify({
+            model: "claude-3-haiku-20240307",
+            max_tokens: 1,
+            messages: [{ role: "user", content: "ping" }],
+          }),
         });
 
-        isValid = res.ok;
+        isValid = msgRes.status !== 401 && msgRes.status !== 403;
         return NextResponse.json({
           valid: isValid,
           error: isValid ? null : "Invalid API key",
