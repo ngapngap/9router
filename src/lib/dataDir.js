@@ -24,6 +24,12 @@ export function getDataDir() {
     return configured;
   } catch (e) {
     if (e?.code === "EACCES" || e?.code === "EPERM") {
+      // In SaaS / strict mode, refuse the silent fallback to ~/.9router (ephemeral
+      // in containers) — surface the error so the orchestrator restarts with the
+      // correct volume/permissions instead of losing data on next deploy.
+      if (process.env.SAAS_ENABLED === "true" || process.env.DATA_DIR_STRICT === "true") {
+        throw new Error(`[DATA_DIR] configured "${configured}" not writable (${e.code}); refusing fallback in SaaS mode`);
+      }
       const fallback = defaultDir();
       console.warn(`[DATA_DIR] configured "${configured}" not writable (${e.code}) → fallback ${fallback}`);
       return fallback;

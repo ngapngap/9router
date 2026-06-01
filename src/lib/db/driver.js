@@ -145,14 +145,17 @@ export async function getAdapter() {
     if (tid != null) {
       return getAdapterForUser(tid);
     }
-    const { getSaasUserIdFromRequest } = await import("@/lib/saas/sessionServer.js");
-    const sid = await getSaasUserIdFromRequest();
-    if (sid != null) {
-      return getAdapterForUser(sid);
-    }
-    // P09 (#21): chỉ cho phép fallback default adapter khi đang trong runAsSystem block.
-    // Nếu không có tenant + không phải system → throw để chặn silent leak default DB.
+    // P09 (#21) fix-up: skip request-scoped session lookup when already in system
+    // context (startup hooks, watchdog, cron). Calling cookies() outside a request
+    // throws and was crashing boot (503 on /api/health).
     if (!isSystemContext()) {
+      const { getSaasUserIdFromRequest } = await import("@/lib/saas/sessionServer.js");
+      const sid = await getSaasUserIdFromRequest();
+      if (sid != null) {
+        return getAdapterForUser(sid);
+      }
+      // P09 (#21): chỉ cho phép fallback default adapter khi đang trong runAsSystem block.
+      // Nếu không có tenant + không phải system → throw để chặn silent leak default DB.
       throw new Error(
         "[DB] missing tenant context: getAdapter() called outside runWithTenant/runAsSystem in SAAS_ENABLED mode"
       );

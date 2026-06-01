@@ -6,8 +6,14 @@ import { getDashboardAuthSession } from "@/lib/auth/dashboardSession";
  */
 export async function getSaasUserIdFromRequest() {
   if (process.env.SAAS_ENABLED !== "true") return null;
-  const cookieStore = await cookies();
-  const token = cookieStore.get("auth_token")?.value;
+  let token;
+  try {
+    const cookieStore = await cookies();
+    token = cookieStore.get("auth_token")?.value;
+  } catch {
+    // Defensive: called outside a request scope (startup/cron) — treat as anonymous.
+    return null;
+  }
   const session = await getDashboardAuthSession(token);
   if (!session?.saas) return null;
   const id = Number(session.sub);
