@@ -4,22 +4,30 @@ import initializeApp from "@/shared/services/initializeApp";
 import { runAsSystem } from "@/lib/saas/tenantContext.js";
 
 // Survive Next.js HMR — module-level flag resets on reload, globalThis persists
-const g = globalThis.__cloudSyncInit ??= { initialized: false, inProgress: null };
+// Latch pattern: persist success AND failure for a cooldown window so failed
+// boots do not silently re-trigger init on every page render. P0 #21 follow-up.
+const g = globalThis.__cloudSyncInit ??= { initialized: false, inProgress: null, lastError: null };
+const FAILURE_COOLDOWN_MS = 30_000;
 
 export async function ensureAppInitialized() {
   if (g.initialized) return true;
   if (g.inProgress) return g.inProgress;
-  // P09 (#21): toàn bộ initializeApp() chạy trong system context — không tenant.
+  // Within failure cooldown, do not retry — surface the previous error.
+  if (g.lastError && Date.now() - g.lastError.at < FAILURE_COOLDOWN_MS) {
+    throw g.lastError.error;
+  }
   g.inProgress = runAsSystem(async () => {
     try {
       await initializeApp();
       g.initialized = true;
+      g.lastError = null;
     } catch (error) {
       console.error("[ServerInit] Error initializing app:", error?.message || error);
+      g.lastError = { error, at: Date.now() };
+      throw error;
     } finally {
       g.inProgress = null;
     }
-    return g.initialized;
   });
   return g.inProgress;
 }

@@ -37,17 +37,17 @@ describe("/api/health — deep check (P10)", () => {
     expect(res.body.checks.dataDir.status).toBe("ok");
   });
 
-  it("returns 503 when DATA_DIR not writable", async () => {
+  it("returns 200 with ok:false when DATA_DIR not writable (degraded but server alive)", async () => {
     process.env.SAAS_ENABLED = "false";
     process.env.DATA_DIR = "/nonexistent-path-xyz-9router-test";
     const { GET } = await import("@/app/api/health/route.js");
     const res = await GET();
-    expect(res.status).toBe(503);
+    expect(res.status).toBe(200);
     expect(res.body.ok).toBe(false);
     expect(res.body.checks.dataDir.status).toBe("fail");
   });
 
-  it("returns 503 when Postgres down (SaaS mode, mock)", async () => {
+  it("returns 200 with ok:false when Postgres down (SaaS mode, mock)", async () => {
     process.env.SAAS_ENABLED = "true";
     process.env.DATA_DIR = process.cwd();
     vi.doMock("@/lib/saas/query.js", () => ({
@@ -55,9 +55,19 @@ describe("/api/health — deep check (P10)", () => {
     }));
     const { GET } = await import("@/app/api/health/route.js");
     const res = await GET();
-    expect(res.status).toBe(503);
+    expect(res.status).toBe(200);
     expect(res.body.ok).toBe(false);
     expect(res.body.checks.pg.status).toBe("fail");
+  });
+
+  it("returns 200 with booting:true when global DB adapter not yet ready", async () => {
+    process.env.SAAS_ENABLED = "false";
+    process.env.DATA_DIR = process.cwd();
+    delete global._dbAdapter;
+    const { GET } = await import("@/app/api/health/route.js");
+    const res = await GET();
+    expect(res.status).toBe(200);
+    expect(res.body.booting).toBe(true);
   });
 });
 
