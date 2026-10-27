@@ -19,7 +19,10 @@ export default {
     forceStream: true,
     thinkingFormat: "openai",
     headers: {
-      "User-Agent": "WorkBuddy/5.5.6",
+      // Chat calls channel-check the client (11128 "request illegal"): the
+      // UA is the app's own "CLI/<ver> WorkBuddy/<ver>", not the bare
+      // "WorkBuddy/<ver>" the billing/auth endpoints take.
+      "User-Agent": "CLI/2.161.0 WorkBuddy/2.161.0",
       "X-Product": "SaaS",
       "X-IDE-Type": "WorkBuddy",
       "X-IDE-Name": "WorkBuddy",

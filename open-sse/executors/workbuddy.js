@@ -1,4 +1,17 @@
+import { randomUUID } from "node:crypto";
 import { DefaultExecutor } from "./default.js";
+
+// The copilot.tencent.com gateway channel-checks WorkBuddy chat calls
+// (HTTP 400 code 11128 "request illegal"): they must name a conversation,
+// turn, and message, and come from the WorkBuddy client UA. CodeBuddy rides
+// the same gateway but is told apart by its own platform, so its executor
+// needs none of this.
+function applyWorkBuddyChannelHeaders(headers) {
+  headers["X-Conversation-ID"] = randomUUID();
+  headers["X-Conversation-Request-ID"] = randomUUID();
+  headers["X-Conversation-Message-ID"] = randomUUID();
+  return headers;
+}
 
 /**
  * WorkBuddyExecutor — Tencent's WorkBuddy desktop app (CodeBuddy plan),
@@ -11,6 +24,10 @@ import { DefaultExecutor } from "./default.js";
 export class WorkBuddyExecutor extends DefaultExecutor {
   constructor() {
     super("workbuddy");
+  }
+
+  buildHeaders(credentials, stream, url, model, body) {
+    return applyWorkBuddyChannelHeaders(super.buildHeaders(credentials, stream, url, model, body));
   }
 
   transformRequest(model, body, stream, credentials) {
@@ -79,6 +96,10 @@ export class WorkBuddyExecutor extends DefaultExecutor {
 export class WorkBuddyAiExecutor extends DefaultExecutor {
   constructor() {
     super("workbuddy-ai");
+  }
+
+  buildHeaders(credentials, stream, url, model, body) {
+    return applyWorkBuddyChannelHeaders(super.buildHeaders(credentials, stream, url, model, body));
   }
 
   transformRequest(model, body, stream, credentials) {
