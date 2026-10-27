@@ -81,6 +81,13 @@ const nextConfig = {
         destination: "/api/v1/responses"
       },
       {
+        // ZCode's openai-chat-completions provider is asked at
+        // baseURL + /chat/completions (no /v1), like /responses above —
+        // keep all three of its API formats on one root baseURL.
+        source: "/chat/completions",
+        destination: "/api/v1/chat/completions"
+      },
+      {
         source: "/systemone",
         destination: "/api/v1/systemone"
       },

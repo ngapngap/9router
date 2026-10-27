@@ -61,6 +61,17 @@ export function stripContinuityFields(body) {
   return body;
 }
 
+function buildConnectionProxyOptions(credentials) {
+  return {
+    connectionProxyEnabled: credentials?.providerSpecificData?.connectionProxyEnabled === true,
+    connectionProxyUrl: credentials?.providerSpecificData?.connectionProxyUrl || "",
+    connectionNoProxy: credentials?.providerSpecificData?.connectionNoProxy || "",
+    vercelRelayUrl: credentials?.providerSpecificData?.vercelRelayUrl || "",
+    proxyPoolId: credentials?.providerSpecificData?.connectionProxyPoolId || null,
+    strictProxy: credentials?.providerSpecificData?.strictProxy === true,
+  };
+}
+
 export async function handleChatCore({ body, modelInfo, credentials, log, onCredentialsRefreshed, onRequestSuccess, onDisconnect, clientRawRequest, connectionId, userAgent, apiKey, ccFilterNaming, rtkEnabled, headroomEnabled, headroomUrl, headroomCompressUserMessages, headroomTimeoutMs, cavemanEnabled, cavemanLevel, ponytailEnabled, ponytailLevel, customPromptEnabled, customPrompt, pxpipeEnabled, pxpipeMinChars, pxpipeTimeoutMs, pxpipeTransform, onPxpipeEvent, sourceFormatOverride, providerThinking, providerOverrides }) {
   const { provider, model } = modelInfo;
   const requestStartTime = Date.now();
@@ -100,7 +111,7 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
   // translated to the Responses body (`input`) yet POSTed to the default Chat
   // Completions URL, and upstream rejects it: "unknown parameter `input`".
   const modelTargetTransport = modelTargetFormat ? resolveTransport(provider, modelTargetFormat) : null;
-  const useTransport = (!modelSupportedFormats || modelSupportedFormats.includes(sourceFormat))
+  let useTransport = (!modelSupportedFormats || modelSupportedFormats.includes(sourceFormat))
     ? runtimeTransport
     : modelTargetTransport;
   // A source-format-matched endpoint keeps the request lossless. Prefer it
@@ -108,6 +119,30 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
   // whose wire format has no supported transport (for example MiniMax-M3:
   // OpenAI clients should stay on /chat/completions; other clients can fall
   // back to its declared Claude target).
+  // ZCode's Start Plan (体验套餐): an OAuth glm account with no GLM Coding
+  // Plan is served at zcode.z.ai with the sign-in's JWT, in Anthropic shape,
+  // as ZCode's own client sends it. The decision is cached per account
+  // (resolveGlmPlanMode); a start account overrides the transport so the
+  // request is translated to Claude format and POSTed to the plan's
+  // endpoint — the GlmExecutor rewrites headers/body on that flag. It runs
+  // before targetFormat is picked so the response translator follows.
+  if (provider === "glm" && credentials?.providerSpecificData?.zcodeJwtToken) {
+    try {
+      const { resolveGlmPlanMode, startPlanConfig } = await import("../services/zcodeStart.js");
+      const startCfg = startPlanConfig(provider);
+      const { start } = await resolveGlmPlanMode(provider, credentials, buildConnectionProxyOptions(credentials), log);
+      if (start && startCfg) {
+        useTransport = { format: "claude", baseUrl: startCfg.baseUrl };
+        credentials.zcodeStartPlan = true;
+      } else {
+        delete credentials.zcodeStartPlan;
+      }
+    } catch (e) {
+      delete credentials.zcodeStartPlan;
+      log?.debug?.("ZCODE", "start-plan resolve failed: " + (e?.message || e));
+    }
+  }
+
   const targetFormat = useTransport?.format || modelTargetFormat || getTargetFormat(provider, credentials);
   if (useTransport && credentials) credentials.runtimeTransport = useTransport;
   const stripList = getModelStrip(alias, model);
@@ -350,16 +385,8 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
     log, provider, model, reqTag
   });
 
-  const proxyOptions = {
-    connectionProxyEnabled: credentials?.providerSpecificData?.connectionProxyEnabled === true,
-    connectionProxyUrl: credentials?.providerSpecificData?.connectionProxyUrl || "",
-    connectionNoProxy: credentials?.providerSpecificData?.connectionNoProxy || "",
-    vercelRelayUrl: credentials?.providerSpecificData?.vercelRelayUrl || "",
-    // Strict pools must never silently fall back to a direct connection —
-    // honored on the Cursor AgentService h2 path and in proxyFetch (#4333).
-    proxyPoolId: credentials?.providerSpecificData?.connectionProxyPoolId || null,
-    strictProxy: credentials?.providerSpecificData?.strictProxy === true,
-  };
+  // Strict pools never silently fall back to a direct connection.
+  const proxyOptions = buildConnectionProxyOptions(credentials);
 
   if (proxyOptions.vercelRelayUrl) {
     const connectionName = credentials?.connectionName || credentials?.connectionId || "unknown";

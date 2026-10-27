@@ -4,6 +4,7 @@
 
 import { proxyAwareFetch } from "../../utils/proxyFetch.js";
 import { U } from "./shared.js";
+import { fetchStartBalance, parseStartBalance, resolveGlmPlanMode } from "../zcodeStart.js";
 
 // GLM quota endpoints (region-aware) — url from registry transport.usage
 const GLM_QUOTA_URLS = {
@@ -58,10 +59,55 @@ export function parseGlmQuotaResponse(json) {
   return { plan, quotas };
 }
 
+async function getStartPlanUsage(provider, jwt, proxyOptions) {
+  try {
+    const balance = await fetchStartBalance(provider, jwt, proxyOptions);
+    const { active, buckets } = parseStartBalance(balance);
+    if (!active) {
+      return { message: "This account has no active ZCode Start Plan or gift allowance." };
+    }
+    const quotas = {};
+    for (const bucket of buckets) {
+      const baseName = (bucket.planName ? bucket.planName + " · " : "") + bucket.name;
+      let name = baseName;
+      let suffix = 2;
+      while (quotas[name]) name = baseName + " (" + suffix++ + ")";
+      const remaining = Math.max(0, 100 - bucket.used);
+      quotas[name] = {
+        used: bucket.used,
+        total: 100,
+        remaining,
+        remainingPercentage: remaining,
+        resetAt: bucket.resetsAt,
+        unlimited: false,
+        usedUnits: bucket.usedUnits,
+        totalUnits: bucket.totalUnits,
+        remainingUnits: bucket.remainingUnits,
+        period: bucket.period,
+        models: bucket.models,
+        aside: bucket.aside,
+      };
+    }
+    return { plan: active.name, until: active.until, quotas };
+  } catch (error) {
+    return { message: "ZCode Start Plan error: " + error.message };
+  }
+}
+
 /**
- * GLM Coding Plan usage (international + China regions)
+ * GLM Coding Plan usage, or ZCode Start Plan/gift buckets for OAuth accounts
+ * without a Coding Plan.
  */
-export async function getGlmUsage(apiKey, provider, proxyOptions = null) {
+export async function getGlmUsage(apiKey, provider, proxyOptions = null, providerSpecificData = null) {
+  const jwt = providerSpecificData?.zcodeJwtToken;
+  if (jwt) {
+    const { start } = await resolveGlmPlanMode(
+      provider,
+      { apiKey, accessToken: apiKey, providerSpecificData },
+      proxyOptions,
+    );
+    if (start) return getStartPlanUsage(provider, jwt, proxyOptions);
+  }
   if (!apiKey) {
     return { message: "GLM API key not available." };
   }

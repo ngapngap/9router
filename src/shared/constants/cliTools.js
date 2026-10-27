@@ -587,6 +587,52 @@ gemini extensions install https://github.com/manalkaff/opendesign
       },
     ],
   },
+  workbuddy: {
+    id: "workbuddy",
+    name: "WorkBuddy",
+    image: "/providers/workbuddy.png",
+    color: "#0052D9",
+    description: "Tencent WorkBuddy desktop app — route its model picker through 9router",
+    configType: "custom",
+    docsUrl: "https://www.codebuddy.cn",
+    notes: [
+      {
+        type: "info",
+        text: "WorkBuddy (and WorkBuddy AI, its international build) keeps its custom models in ~/.workbuddy/models.json (~/.workbuddy-ai for WorkBuddy AI). 9Router writes its models there and they appear in WorkBuddy's model picker."
+      },
+      {
+        type: "info",
+        text: "WorkBuddy rewrites models.json itself after every start (it purges local models the computer can't run) — that is normal and leaves 9Router's entries alone. Pick the model per task in WorkBuddy's window."
+      },
+      {
+        type: "warning",
+        text: "Everything else in models.json (the app's own local models, an entry you edited there) is kept when 9Router re-applies. Files stay private (0600)."
+      },
+    ],
+  },
+  zcode: {
+    id: "zcode",
+    name: "ZCode",
+    image: "/providers/zcode.png",
+    color: "#3B5BDB",
+    description: "Zhipu ZCode desktop app — route its picker through 9router",
+    configType: "custom",
+    docsUrl: "https://z.ai",
+    notes: [
+      {
+        type: "info",
+        text: "ZCode keeps its providers in ~/.zcode/v2/provider_config.json and config.json (moved with the data folder if you changed ZCode's data storage path). 9Router writes both files and its models appear in ZCode's model picker."
+      },
+      {
+        type: "info",
+        text: "ZCode reads its providers at start-up — restart ZCode after Apply. Model choice lives in each ZCode window, not in the files."
+      },
+      {
+        type: "warning",
+        text: "Files are private (0600). Anything you set by hand in ZCode (provider name, logo, manual model rules) is kept when 9Router re-applies."
+      },
+    ],
+  },
   // HIDDEN: gemini-cli
   // "gemini-cli": {
   //   id: "gemini-cli",

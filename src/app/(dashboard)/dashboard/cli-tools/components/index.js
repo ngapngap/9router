@@ -12,6 +12,8 @@ export { default as ClineToolCard } from "./ClineToolCard";
 export { default as KiloToolCard } from "./KiloToolCard";
 export { default as DeepSeekTuiToolCard } from "./DeepSeekTuiToolCard";
 export { default as JcodeToolCard } from "./JcodeToolCard";
+export { default as ZcodeToolCard } from "./ZcodeToolCard";
+export { default as WorkbuddyToolCard } from "./WorkbuddyToolCard";
 export { default as GrokBuildToolCard } from "./GrokBuildToolCard";
 export { default as GenericCliToolCard } from "./GenericCliToolCard";
 export { default as MitmServerCard } from "./MitmServerCard";

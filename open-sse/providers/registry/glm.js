@@ -33,6 +33,18 @@ export default {
     apiBaseUrl: "https://api.z.ai",
     planApiKeyName: "zcode-api-key",
   },
+  // ZCode's Start Plan (体验套餐) — the free gift allowance for accounts with
+  // no GLM Coding Plan (plugin 0.1.32 parity): the sign-in's JWT
+  // serves it at zcode.z.ai; the api key on api.z.ai only reaches the paid
+  // plan or the account balance (429/1113 otherwise). The gift buckets the
+  // card shows (Start Plan grant, weekend bonus, referral rewards) come from
+  // the balance endpoint with the same JWT.
+  startPlan: {
+    baseUrl: "https://zcode.z.ai/api/v1/zcode-plan/anthropic/v1/messages",
+    balanceUrl: "https://zcode.z.ai/api/v1/zcode-plan/billing/balance",
+    subscriptionListUrl: "https://api.z.ai/api/biz/subscription/list",
+    appVersion: "3.16.3",
+  },
   transport: {
     baseUrl: "https://api.z.ai/api/anthropic/v1/messages",
     format: "claude",
