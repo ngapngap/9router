@@ -144,3 +144,13 @@ export async function getCodeBuddyCnUsage(accessToken, apiKey, providerSpecificD
 export async function getCodeBuddyIntlUsage(accessToken, apiKey, providerSpecificData, proxyOptions = null) {
   return getCodeBuddyUsage("codebuddy-intl", accessToken, apiKey, providerSpecificData, proxyOptions);
 }
+
+// WorkBuddy and WorkBuddy AI ride the same billing endpoint under their own
+// provider entry (their own User-Agent and, for AI, its own domain).
+export async function getWorkBuddyUsage(accessToken, apiKey, providerSpecificData, proxyOptions = null) {
+  return getCodeBuddyUsage("workbuddy", accessToken, apiKey, providerSpecificData, proxyOptions);
+}
+
+export async function getWorkBuddyAiUsage(accessToken, apiKey, providerSpecificData, proxyOptions = null) {
+  return getCodeBuddyUsage("workbuddy-ai", accessToken, apiKey, providerSpecificData, proxyOptions);
+}
