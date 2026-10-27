@@ -54,6 +54,28 @@ const workbuddy = {
     if (!response.ok) return { ok: false, data: { error: "request_failed" } };
     const data = await response.json();
     if (data.code === 0 && data.data?.accessToken) {
+      let uid = data.data.uid || "";
+      // The token response names no account: the desktop app asks the account
+      // endpoint with the fresh token (plugin browserSignIn) and sends that
+      // uid as X-User-Id on every chat.
+      if (!uid) {
+        try {
+          const who = await fetch(`${config.baseUrl}/v2/plugin/login/account?state=${encodeURIComponent(deviceCode)}`, {
+            headers: {
+              Accept: "application/json",
+              Authorization: `Bearer ${data.data.accessToken}`,
+              "User-Agent": config.userAgent,
+              "X-Domain": new URL(config.baseUrl).host,
+              "X-No-User-Id": "true",
+              "X-No-Enterprise-Id": "true",
+            },
+          });
+          if (who.ok) {
+            const w = await who.json();
+            if (w.code === 0) uid = w.data?.uid || "";
+          }
+        } catch {}
+      }
       return {
         ok: true,
         data: {
@@ -61,6 +83,7 @@ const workbuddy = {
           refresh_token: data.data.refreshToken || "",
           token_type: data.data.tokenType || "Bearer",
           expires_in: data.data.expiresIn,
+          uid: data.data.uid || data.data.userId || "",
         },
       };
     }
@@ -72,7 +95,7 @@ const workbuddy = {
     accessToken: tokens.access_token,
     refreshToken: tokens.refresh_token,
     expiresIn: tokens.expires_in || 86400,
-    providerSpecificData: {},
+    providerSpecificData: tokens.uid ? { uid: tokens.uid } : {},
   }),
 };
 

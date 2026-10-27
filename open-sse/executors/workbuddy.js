@@ -6,8 +6,9 @@ import { DefaultExecutor } from "./default.js";
 // turn, and message, and come from the WorkBuddy client UA. CodeBuddy rides
 // the same gateway but is told apart by its own platform, so its executor
 // needs none of this.
-function applyWorkBuddyChannelHeaders(headers) {
+function applyWorkBuddyChannelHeaders(headers, credentials) {
   headers["X-Conversation-ID"] = randomUUID();
+  if (credentials?.providerSpecificData?.uid) headers["X-User-Id"] = credentials.providerSpecificData.uid;
   headers["X-Conversation-Request-ID"] = randomUUID();
   headers["X-Conversation-Message-ID"] = randomUUID();
   return headers;
@@ -27,7 +28,7 @@ export class WorkBuddyExecutor extends DefaultExecutor {
   }
 
   buildHeaders(credentials, stream, url, model, body) {
-    return applyWorkBuddyChannelHeaders(super.buildHeaders(credentials, stream, url, model, body));
+    return applyWorkBuddyChannelHeaders(super.buildHeaders(credentials, stream, url, model, body), credentials);
   }
 
   transformRequest(model, body, stream, credentials) {
@@ -99,7 +100,7 @@ export class WorkBuddyAiExecutor extends DefaultExecutor {
   }
 
   buildHeaders(credentials, stream, url, model, body) {
-    return applyWorkBuddyChannelHeaders(super.buildHeaders(credentials, stream, url, model, body));
+    return applyWorkBuddyChannelHeaders(super.buildHeaders(credentials, stream, url, model, body), credentials);
   }
 
   transformRequest(model, body, stream, credentials) {

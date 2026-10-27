@@ -19,15 +19,18 @@ export default {
     forceStream: true,
     thinkingFormat: "openai",
     headers: {
-      // Chat calls channel-check the client (11128 "request illegal"): the
-      // UA is the app's own "CLI/<ver> WorkBuddy/<ver>", not the bare
-      // "WorkBuddy/<ver>" the billing/auth endpoints take.
-      "User-Agent": "CLI/2.161.0 WorkBuddy/2.161.0",
+      // Channel check (11128 "request illegal"): chat must carry WorkBuddy
+      // desktop app's own header set — the plugin's sign() — not CodeBuddy's.
+      "User-Agent": "WorkBuddy/5.5.6",
       "X-Product": "SaaS",
       "X-IDE-Type": "WorkBuddy",
       "X-IDE-Name": "WorkBuddy",
-      "x-requested-with": "XMLHttpRequest",
-      "x-codebuddy-request": "1",
+      "X-IDE-Version": "5.5.6",
+      "X-Requested-With": "XMLHttpRequest",
+      "X-Agent-Intent": "craft",
+      "X-Agent-Purpose": "conversation",
+      "X-Agent-Type": "main",
+      "X-Domain": "www.workbuddy.ai",
     },
     auth: { combined: true, header: "Authorization", scheme: "bearer" },
     usage: { url: "https://www.workbuddy.ai/v2/billing/meter/get-user-resource" },
