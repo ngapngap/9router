@@ -68,6 +68,12 @@ const workbuddyAi = {
     return { ok: false, data: { error: data.msg || "unknown_error" } };
   },
   refreshToken: null,
+  mapTokens: (tokens) => ({
+    accessToken: tokens.access_token,
+    refreshToken: tokens.refresh_token,
+    expiresIn: tokens.expires_in || 86400,
+    providerSpecificData: {},
+  }),
 };
 
 export default workbuddyAi;
