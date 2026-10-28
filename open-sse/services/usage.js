@@ -12,6 +12,7 @@ import { getKiroUsage } from "./usage/kiro.js";
 import { getMiniMaxUsage } from "./usage/minimax.js";
 import { getMiniMaxCodeUsage } from "./minimaxCodeUsage.js";
 import { getCodeBuddyCnUsage, getCodeBuddyIntlUsage, getWorkBuddyUsage, getWorkBuddyAiUsage } from "./usage/codebuddy-cn.js";
+import { getAutoClawUsage } from "./usage/autoclaw.js";
 import { getGrokCliUsage } from "./usage/grok-cli.js";
 import { getKimiUsage } from "./usage/kimi.js";
 import { getDeepseekUsage } from "./usage/deepseek.js";
@@ -71,6 +72,7 @@ const USAGE_HANDLERS = {
   "xiaomi-mimo": (c) => getXiaomiMimoUsage(c.accessToken, c.providerSpecificData, c.proxyOptions),
   commandcode: (c) => getCommandCodeUsage(c.apiKey, c.proxyOptions),
   cursor: (c) => getCursorUsage(c.accessToken, c.providerSpecificData, c.proxyOptions),
+  autoclaw: (c) => getAutoClawUsage(c.accessToken, c.proxyOptions),
 };
 
 // Qoder intl/CN share one usage path: PATs must be exchanged to a job token

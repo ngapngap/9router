@@ -31,6 +31,10 @@ export default {
       header: "X-Authorization",
       scheme: "bearer",
     },
+    // Credit wallet (reward/daily/subscription points) - balance-only rows.
+    usage: {
+      url: "https://autoglm-api.autoglm.ai/agent-assetmgr/api/v2/wallets?biz_app_id=autoclaw",
+    },
   },
   models: [
     { id: "zai_auto", name: "Auto" },
@@ -38,6 +42,9 @@ export default {
     { id: "zaicoding_glm-5.3", name: "GLM-5.3" },
     { id: "zai_glm-5.3-flash", name: "GLM-5.3-Flash" },
   ],
+  features: {
+    usage: true,
+  },
   oauth: {
     // Paste-token sign-in: the web Google/z.ai OAuth runs through a
     // localhost callback port and a browser captcha the server can't host.

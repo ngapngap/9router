@@ -692,6 +692,24 @@ export function parseQuotaData(provider, data) {
         }
         break;
 
+      case "autoclaw":
+        // Credit wallet (reward/daily/subscription points) - balance-only rows,
+        // same rendering contract as DeepSeek (remainingPercentage + isCreditBalance).
+        if (data.quotas) {
+          Object.entries(data.quotas).forEach(([name, quota]) => {
+            normalizedQuotas.push({
+              name,
+              used: quota.used || 0,
+              total: quota.total || 0,
+              resetAt: quota.resetAt || null,
+              remainingPercentage: quota.remainingPercentage,
+              isCreditBalance: quota.isCreditBalance ?? true,
+              currency: quota.currency || "points",
+            });
+          });
+        }
+        break;
+
       case "deepseek":
         // Credit balance — remainingPercentage only (no absolute remaining).
         if (data.quotas) {
