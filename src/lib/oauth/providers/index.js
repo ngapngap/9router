@@ -24,6 +24,7 @@ import clinepass from "./clinepass.js";
 import gitlab from "./gitlab.js";
 import codebuddyCn from "./codebuddy-cn.js";
 import codebuddyIntl from "./codebuddy-intl.js";
+import autoClawOauth from "./autoclaw.js";
 import workbuddyOauth from "./workbuddy.js";
 import workbuddyAiOauth from "./workbuddy-ai.js";
 import kimchi from "./kimchi.js";
@@ -59,6 +60,7 @@ const PROVIDERS = {
   "codebuddy-intl": codebuddyIntl,
   workbuddy: workbuddyOauth,
   "workbuddy-ai": workbuddyAiOauth,
+  autoclaw: autoClawOauth,
   kimchi,
   trae,
   windsurf,

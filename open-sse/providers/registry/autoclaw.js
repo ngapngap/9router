@@ -1,0 +1,41 @@
+export default {
+  id: "autoclaw",
+  alias: "aclawgl",
+  uiAlias: "aclawgl",
+  hidden: false,
+  priority: 86,
+  display: {
+    name: "AutoClaw",
+    icon: "smart_toy",
+    color: "#4F6EF7",
+    website: "https://www.autoglm.ai",
+    notice: { signupUrl: "https://autoglm.zhipuai.cn" },
+  },
+  category: "oauth",
+  authModes: ["oauth"],
+  hasOAuth: true,
+  transport: {
+    baseUrl: "https://autoglm-api.autoglm.ai/autoclaw-proxy/proxy/autoclaw/v1/chat/completions",
+    forceStream: true,
+    thinkingFormat: "openai",
+    headers: {
+      "User-Agent": "AutoClaw/1.18.1 (linux-x64)",
+      "X-Product": "autoclaw",
+      "X-Client-Type": "pc",
+      "X-Channel": "AutoClaw4",
+      "X-Agent-Id": "main",
+      "x_trace_id": "autoclaw-desktop",
+    },
+    auth: {
+      combined: true,
+      header: "X-Authorization",
+      scheme: "bearer",
+    },
+  },
+  models: [
+    { id: "zai_auto", name: "Auto" },
+    { id: "zai_auto-fast", name: "Auto-Fast" },
+    { id: "zaicoding_glm-5.3", name: "GLM-5.3" },
+    { id: "zai_glm-5.3-flash", name: "GLM-5.3-Flash" },
+  ],
+};

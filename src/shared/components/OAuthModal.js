@@ -30,6 +30,45 @@ const PASTE_TOKEN_PROVIDERS = {
   },
 };
 
+
+// AutoClaw sign-in panel: the overseas web OAuth flow (Google/z.ai) needs a
+// localhost callback port and a browser captcha a server can't host, so the
+// sign-in takes the official client's access token pasted in.
+function SmsTokenInput({ onDone, onError }) {
+  const [token, setToken] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const submit = async () => {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/oauth/autoclaw/exchange", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: token.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Sign-in failed");
+      onDone();
+    } catch (e) {
+      onError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="space-y-3 py-2">
+      <p className="text-xs text-text-muted">
+        Sign in to the official AutoClaw client, then paste its access token (JWT) below — the web Google/z.ai OAuth needs a localhost callback port the server cannot host.
+      </p>
+      <div className="flex gap-2">
+        <Input value={token} onChange={(e) => setToken(e.target.value)} placeholder="Paste access token (JWT)" className="flex-1 font-mono text-xs" />
+        <Button onClick={submit} disabled={busy || !token.trim()}>Connect</Button>
+      </div>
+    </div>
+  );
+}
+
 /**
  * OAuth Modal Component
  * - Localhost: Auto callback via popup message
@@ -299,6 +338,16 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
         "minimax-code-global",
         "nous",
       ];
+            // AutoClaw: CN signs in with phone + SMS code; overseas takes the
+      // official client's access token pasted in. Neither opens a popup.
+      if (provider === "autoclaw") {
+        // No popup: the token is pasted into the panel below.
+        setIsDeviceCode(true);
+        setStep("input");
+        setAuthData({});
+        return;
+      }
+
       if (deviceCodeProviders.includes(provider)) {
         setIsDeviceCode(true);
         setStep("waiting");
@@ -958,6 +1007,15 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
               </div>
             )}
           </>
+        )}
+
+
+        {/* AutoClaw: CN phone + SMS code, overseas pasted client token */}
+        {isDeviceCode && provider === "autoclaw" && step === "input" && (
+          <SmsTokenInput
+            onDone={() => { setStep("success"); onSuccessRef.current?.(); }}
+            onError={(m) => { setError(m); setStep("error"); }}
+          />
         )}
 
         {/* Success Step */}

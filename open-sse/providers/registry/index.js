@@ -18,6 +18,7 @@ import p15 from "./cline.js";
 import p16 from "./clinepass.js";
 import p17 from "./cloudflare-ai.js";
 import p18 from "./codebuddy-cn.js";
+import p155 from "./autoclaw.js";
 import p153 from "./workbuddy.js";
 import p154 from "./workbuddy-ai.js";
 import p19 from "./codex.js";
@@ -255,6 +256,7 @@ export default [
   p100,
   p153,
   p154,
+  p155,
   // p102, // trae — hidden, no tool calling
   p103,
   p105,

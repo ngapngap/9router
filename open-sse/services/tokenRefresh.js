@@ -14,6 +14,7 @@ import {
   refreshCopilotToken,
   refreshCodebuddyToken,
   refreshCodebuddyIntlToken,
+  refreshAutoClawToken,
   refreshTraeToken,
   refreshZedToken,
   refreshWindsurfToken,
@@ -36,6 +37,7 @@ export {
   refreshCopilotToken,
   refreshCodebuddyToken,
   refreshCodebuddyIntlToken,
+  refreshAutoClawToken,
   refreshTraeToken,
   refreshZedToken,
   refreshWindsurfToken,
@@ -150,6 +152,11 @@ const REFRESH_HANDLERS = {
   gcli: (c, log) => refreshXaiToken(c.refreshToken, log),
   "codebuddy-cn": (c, log) => refreshCodebuddyToken(c.refreshToken, log),
   "codebuddy-intl": (c, log) => refreshCodebuddyIntlToken(c.refreshToken, log),
+  // AutoClaw: refresh token rotation across the two hosts; SMS accounts
+  // (source_id agent*) start on the CN host, Google/z.ai ones on the global.
+  autoclaw: (c, log) => refreshAutoClawToken(c.refreshToken, log, false),
+  workbuddy: (c, log) => refreshCodebuddyToken(c.refreshToken, log),
+  "workbuddy-ai": (c, log) => refreshCodebuddyIntlToken(c.refreshToken, log),
   trae: (c, log) => refreshTraeToken(c.refreshToken, c, log),
   cline: (c, log) => refreshClineToken(c.refreshToken, log),
   // ClinePass shares Cline's WorkOS auth endpoints, so the same refresh works.

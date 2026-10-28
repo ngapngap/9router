@@ -30,6 +30,7 @@ import { MimoFreeExecutor } from "./mimo-free.js";
 import { CodeBuddyExecutor } from "./codebuddy-cn.js";
 import { CodeBuddyIntlExecutor } from "./codebuddy-intl.js";
 import { WorkBuddyExecutor, WorkBuddyAiExecutor } from "./workbuddy.js";
+import { AutoClawExecutor } from "./autoclaw.js";
 import TraeExecutor from "./trae.js";
 import ZedExecutor from "./zed.js";
 import WindsurfExecutor from "./windsurf.js";
@@ -78,6 +79,7 @@ const executors = {
   "codebuddy-intl": new CodeBuddyIntlExecutor(),
   workbuddy: new WorkBuddyExecutor(),
   "workbuddy-ai": new WorkBuddyAiExecutor(),
+  autoclaw: new AutoClawExecutor(),
   trae: new TraeExecutor(),
   zed: new ZedExecutor(),
   windsurf: new WindsurfExecutor(),
