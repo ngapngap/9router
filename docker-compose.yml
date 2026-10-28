@@ -1,6 +1,6 @@
 services:
   9router:
-    image: decolua/9router:latest
+    image: ghcr.io/ngapngap/9router:latest
     container_name: 9router
     restart: always
     ports:
@@ -11,6 +11,7 @@ services:
       - .env
     environment:
       DATA_DIR: /app/data
+      TZ: ${TZ:-Asia/Ho_Chi_Minh}
       PORT: "20128"
       HOSTNAME: "0.0.0.0"
       NODE_ENV: production
