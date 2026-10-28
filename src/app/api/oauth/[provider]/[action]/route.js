@@ -96,6 +96,17 @@ export async function GET(request, { params }) {
     const { searchParams } = new URL(request.url);
 
     if (action === "authorize") {
+      if (provider === "autoclaw") {
+        // Overseas web OAuth (Google/z.ai) needs a localhost callback port
+        // and a browser captcha the server can't host, so sign-in takes the
+        // official client's access token pasted in (validated at /exchange).
+        return NextResponse.json({
+          state: crypto.randomUUID(),
+          method: "paste_token",
+          instructions: "登录官方 AutoClaw 客户端后，把它的 access token（JWT）粘贴到下方。",
+        });
+      }
+
       // Xiaomi Desktop: custom ECDH flow — generate keypair, start proxy, return authorize URL
       if (provider === "xiaomi-mimo") {
         const { generateKeyPair, buildAuthorizeUrl, getKeyName } = await import("@/lib/oauth/providers/xiaomi-mimo");
@@ -320,6 +331,33 @@ export async function POST(request, { params }) {
 
     if (action === "exchange") {
       const { code, redirectUri, codeVerifier, state, meta, systemId } = body;
+
+      // AutoClaw: an overseas pasted access token — the web OAuth flow
+      // (Google/z.ai) needs a localhost callback port and a browser captcha
+      // the server can't host, so this is not an authorization-code grant.
+      if (provider === "autoclaw") {
+        try {
+          const { validatePastedToken } = await import("@/lib/oauth/providers/autoclaw");
+          const tokenData = validatePastedToken(code, body?.refreshToken);
+          const connection = await createProviderConnection({
+            provider,
+            authType: "oauth",
+            accessToken: tokenData.access,
+            refreshToken: tokenData.refresh || null,
+            expiresAt: tokenData.expiresAt ? new Date(tokenData.expiresAt).toISOString() : null,
+            email: tokenData.email ?? null,
+            displayName: tokenData.accountId ?? null,
+            providerSpecificData: { authMethod: "oauth", ...(tokenData.uid ? { uid: tokenData.uid } : {}) },
+            testStatus: "active",
+          });
+          return NextResponse.json({
+            success: true,
+            connection: { id: connection.id, provider: connection.provider, email: connection.email, displayName: connection.displayName },
+          });
+        } catch (err) {
+          return NextResponse.json({ error: err.message }, { status: 400 });
+        }
+      }
 
       // Xiaomi MiMo: no token exchange needed — the callback already decrypted the sk.
       // Just read the session result and create the connection.

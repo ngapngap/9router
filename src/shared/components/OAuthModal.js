@@ -33,9 +33,12 @@ const PASTE_TOKEN_PROVIDERS = {
 
 // AutoClaw sign-in panel: the overseas web OAuth flow (Google/z.ai) needs a
 // localhost callback port and a browser captcha a server can't host, so the
-// sign-in takes the official client's access token pasted in.
+// sign-in takes the client's access + refresh token pasted in — from the
+// gateway export (Agent2API and friends) or the client's own storage. With
+// the refresh token 9router rotates the access forever; without, ~24h.
 function SmsTokenInput({ onDone, onError }) {
   const [token, setToken] = useState("");
+  const [refresh, setRefresh] = useState("");
   const [busy, setBusy] = useState(false);
 
   const submit = async () => {
@@ -44,7 +47,7 @@ function SmsTokenInput({ onDone, onError }) {
       const res = await fetch("/api/oauth/autoclaw/exchange", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: token.trim() }),
+        body: JSON.stringify({ code: token.trim(), refreshToken: refresh.trim() }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Sign-in failed");
@@ -59,16 +62,19 @@ function SmsTokenInput({ onDone, onError }) {
   return (
     <div className="space-y-3 py-2">
       <div className="text-xs text-text-muted space-y-1">
-        <p>Đăng nhập trong ứng dụng AutoClaw chính thức, rồi lấy access token (JWT) của nó:</p>
+        <p>Nếu bạn chạy Agent2API (hoặc magpie + plugin) trên máy có app AutoClaw: dùng chức năng <b>xuất accounts</b> của nó, rồi dán hai giá trị sau:</p>
         <ol className="list-decimal ml-4 space-y-0.5">
-          <li>Ứng dụng: mở tab Network trong DevTools (hoặc file cấu hình của client) và sao chép giá trị <code className="font-mono">access_token</code> — một JWT dài, bắt đầu bằng <code className="font-mono">eyJ</code>.</li>
-          <li>Dán vào ô bên dưới. Token sống khoảng 24 giờ; 9router tự refresh bằng refresh token đi kèm khi có.</li>
+          <li><code className="font-mono">accessToken</code> (bắt buộc) — JWT sống ~24 giờ.</li>
+          <li><code className="font-mono">refreshToken</code> (khuyến khích) — có nó 9router tự gia hạn mãi, không cần dán lại.</li>
         </ol>
-        <p>Trang web Google/z.ai OAuth cần một localhost callback port và captcha trên trình duyệt mà server không thể lưu trữ, vì vậy đăng nhập web trực tiếp không hoạt động từ dashboard này.</p>
+        <p>Trang web Google/z.ai OAuth cần localhost callback port và captcha browser mà server không thể host, nên đăng nhập web trực tiếp không dùng được từ dashboard này.</p>
       </div>
       <div className="flex gap-2">
-        <Input value={token} onChange={(e) => setToken(e.target.value)} placeholder="Dán access token (eyJ...)" className="flex-1 font-mono text-xs" />
+        <Input value={token} onChange={(e) => setToken(e.target.value)} placeholder="Dán accessToken (eyJ...)" className="flex-1 font-mono text-xs" />
         <Button onClick={submit} disabled={busy || !token.trim()}>Connect</Button>
+      </div>
+      <div className="flex gap-2">
+        <Input value={refresh} onChange={(e) => setRefresh(e.target.value)} placeholder="Dán refreshToken (eyJ...) — tùy chọn nhưng nên có" className="flex-1 font-mono text-xs" />
       </div>
     </div>
   );

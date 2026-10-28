@@ -82,15 +82,17 @@ function tokenFields(data) {
 // Overseas: the web OAuth flow (Google/z.ai) runs through a localhost
 // callback and an Aliyun captcha the server can't host, so a token pasted
 // from the official client (a JWT whose exp/refresh ride along) signs in.
-export function validatePastedToken(token) {
+export function validatePastedToken(token, refreshToken = "") {
   const access = bareToken(token);
   if (!access || access.split(".").length < 2) {
     throw new Error("AutoClaw token must be the client's access JWT");
   }
-  const refresh = "";
+  const refresh = bareToken(refreshToken);
   const exp = jwtClaim(access, "exp");
   const expiresAt = typeof exp === "number" && exp > 0 ? exp * 1000 - 10 * 60 * 1000 : Date.now() + 5 * 3600 * 1000;
-  return { access, refresh, expiresAt, accountId: jwtClaim(access, "sub") ? String(jwtClaim(access, "sub")) : "AutoClaw account", email: null, uid: jwtClaim(access, "user_id") ?? undefined };
+  // The gateway export names the account by its email/jti claim, not sub.
+  const name = jwtClaim(access, "jti") || jwtClaim(access, "sub") || "AutoClaw account";
+  return { access, refresh, expiresAt, accountId: String(name), email: null, uid: jwtClaim(access, "user_id") !== undefined ? String(jwtClaim(access, "user_id")) : undefined };
 }
 
 export async function refreshAutoClawToken(refreshToken, log, isCn) {
