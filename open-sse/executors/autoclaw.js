@@ -205,6 +205,9 @@ async function refusedNotSignIn(res) {
 
 class AutoClawExecutorBase extends DefaultExecutor {
   parseError(response, bodyText) {
+    if (response?.status === 406) {
+      console.error("[AutoClaw] 406 body:", String(bodyText || "").slice(0, 600));
+    }
     if (bodyText) {
       try {
         const d = JSON.parse(bodyText);
