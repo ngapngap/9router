@@ -2,11 +2,11 @@ import { createHash, randomBytes } from "node:crypto";
 import { DefaultExecutor } from "./default.js";
 
 // AutoClaw (Zhipu's autoglm agent client), cloned from the community plugin
-// (magpie-community/plugins packages/autoclaw). Two very different gateways:
-//   - autoclaw     overseas, https://autoglm-api.autoglm.ai, own headers
-// Both: no max_tokens, the official system prompt must open the system
-// message, and another agent's identity line in any system/developer prompt
-// is refused (406). Tokens are JWTs; device_id rides in the refresh token.
+// (magpie-community/plugins packages/autoclaw), overseas gateway
+// https://autoglm-api.autoglm.ai. No max_tokens, the official system prompt
+// must open the system message, and another client's official prompt
+// sentences in any system/developer prompt are refused (406). Tokens are
+// JWTs; device_id rides in the refresh token.
 
 const APP_ID = "100003";
 const APP_KEY = "38d2391985e2369a5fb8227d8e6cd5e5";
@@ -84,6 +84,12 @@ const FLAGGED = [
   [/You are Cline/gi, "You are the Cline agent"],
   [/You are Qwen Code/gi, "You are the Qwen Code agent"],
   [/You are ZCode/gi, "You are the ZCode agent"],
+  // The upstream fingerprints whole OFFICIAL opening sentences, not just the
+  // identity clause: the Claude Code / Codex second line is refused (406) even
+  // after the identity rewrite (verified live - single-word edits clear it,
+  // the exact string inside another sentence still 406s). Replace the sentence.
+  [/You are an interactive CLI tool that helps users with software engineering tasks/gi, "You are a helpful AI assistant that helps with software engineering tasks."],
+  [/You are running as a coding agent in the Codex CLI on a user's computer/gi, "You are running as a coding agent in a command-line tool on the user's computer"],
 ];
 
 function unflagged(text) {
