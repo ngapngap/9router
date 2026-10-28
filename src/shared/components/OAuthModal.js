@@ -58,11 +58,16 @@ function SmsTokenInput({ onDone, onError }) {
 
   return (
     <div className="space-y-3 py-2">
-      <p className="text-xs text-text-muted">
-        Sign in to the official AutoClaw client, then paste its access token (JWT) below — the web Google/z.ai OAuth needs a localhost callback port the server cannot host.
-      </p>
+      <div className="text-xs text-text-muted space-y-1">
+        <p>Đăng nhập trong ứng dụng AutoClaw chính thức, rồi lấy access token (JWT) của nó:</p>
+        <ol className="list-decimal ml-4 space-y-0.5">
+          <li>Ứng dụng: mở tab Network trong DevTools (hoặc file cấu hình của client) và sao chép giá trị <code className="font-mono">access_token</code> — một JWT dài, bắt đầu bằng <code className="font-mono">eyJ</code>.</li>
+          <li>Dán vào ô bên dưới. Token sống khoảng 24 giờ; 9router tự refresh bằng refresh token đi kèm khi có.</li>
+        </ol>
+        <p>Trang web Google/z.ai OAuth cần một localhost callback port và captcha trên trình duyệt mà server không thể lưu trữ, vì vậy đăng nhập web trực tiếp không hoạt động từ dashboard này.</p>
+      </div>
       <div className="flex gap-2">
-        <Input value={token} onChange={(e) => setToken(e.target.value)} placeholder="Paste access token (JWT)" className="flex-1 font-mono text-xs" />
+        <Input value={token} onChange={(e) => setToken(e.target.value)} placeholder="Dán access token (eyJ...)" className="flex-1 font-mono text-xs" />
         <Button onClick={submit} disabled={busy || !token.trim()}>Connect</Button>
       </div>
     </div>
