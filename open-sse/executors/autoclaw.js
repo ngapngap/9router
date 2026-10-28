@@ -206,7 +206,8 @@ async function refusedNotSignIn(res) {
 class AutoClawExecutorBase extends DefaultExecutor {
   parseError(response, bodyText) {
     if (response?.status === 406) {
-      console.error("[AutoClaw] 406 body:", String(bodyText || "").slice(0, 600));
+      console.error("[AutoClaw] 406 body:", JSON.stringify(String(bodyText || ""))); 
+      console.error("[AutoClaw] 406 system-prompt sent:", String(this.__lastSystem || "").slice(0, 800));
     }
     if (bodyText) {
       try {
@@ -247,7 +248,12 @@ export class AutoClawExecutor extends AutoClawExecutorBase {
   transformRequest(model, body, stream, credentials) {
     const transformed = super.transformRequest(model, body, stream, credentials);
     transformed.stream = true;
-    return rewriteBody(JSON.stringify(transformed)) || transformed;
+    const rewritten = rewriteBody(JSON.stringify(transformed)) || transformed;
+    try {
+      const sysMsg = (rewritten.messages || []).find((m) => m && m.role === "system");
+      this.__lastSystem = sysMsg ? (typeof sysMsg.content === "string" ? sysMsg.content : JSON.stringify(sysMsg.content)) : "";
+    } catch { /* logging aid only */ }
+    return rewritten;
   }
 
   buildUrl(model, stream, urlIndex = 0, credentials = null) {
