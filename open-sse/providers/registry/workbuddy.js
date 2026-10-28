@@ -57,4 +57,7 @@ export default {
     platform: "workbuddy",
     pollInterval: 5000,
   },
+  features: {
+    usage: true,
+  },
 };
