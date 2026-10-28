@@ -38,4 +38,12 @@ export default {
     { id: "zaicoding_glm-5.3", name: "GLM-5.3" },
     { id: "zai_glm-5.3-flash", name: "GLM-5.3-Flash" },
   ],
+  oauth: {
+    // Paste-token sign-in: the web Google/z.ai OAuth runs through a
+    // localhost callback port and a browser captcha the server can't host.
+    baseUrl: "https://autoglm-api.autoglm.ai",
+    userAgent: "AutoClaw/1.18.1 (linux-x64)",
+    flowType: "paste_token",
+    platform: "autoclaw",
+  },
 };
