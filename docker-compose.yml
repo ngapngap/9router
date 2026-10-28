@@ -1,17 +1,18 @@
 services:
   9router:
-    image: ghcr.io/ngapngap/9router:latest
+    image: 9router:zcode-test
     container_name: 9router
-    restart: always
+    restart: unless-stopped
     ports:
-      - "20128:20128"
+      - "0.0.0.0:20128:20128"
     volumes:
-      - 9router-data:/app/data
+      - /home/ubuntu/.9router:/app/data
+      - /home/ubuntu/.zcode:/home/node/.zcode
     env_file:
       - .env
     environment:
       DATA_DIR: /app/data
-      TZ: ${TZ:-Asia/Ho_Chi_Minh}
+      TZ: Asia/Ho_Chi_Minh
       PORT: "20128"
       HOSTNAME: "0.0.0.0"
       NODE_ENV: production
