@@ -90,6 +90,10 @@ const FLAGGED = [
   // the exact string inside another sentence still 406s). Replace the sentence.
   [/You are an interactive CLI tool that helps users with software engineering tasks/gi, "You are a helpful AI assistant that helps with software engineering tasks."],
   [/You are running as a coding agent in the Codex CLI on a user's computer/gi, "You are running as a coding agent in a command-line tool on the user's computer"],
+  // Upstream also fingerprints the model-name banner some CLI harnesses add
+  // ("coding agent powered by the <model> model") - verified live 406 with the
+  // exact string, 200 with any word swapped. Strip the model name mention.
+  [/You are a coding agent powered by the [\w.\-]+ model/gi, "You are a coding agent powered by a GLM model."],
 ];
 
 function unflagged(text) {
