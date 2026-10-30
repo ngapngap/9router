@@ -94,6 +94,13 @@ const FLAGGED = [
   // ("coding agent powered by the <model> model") - verified live 406 with the
   // exact string, 200 with any word swapped. Strip the model name mention.
   [/You are a coding agent powered by the [\w.\-]+ model/gi, "You are a coding agent powered by a GLM model."],
+  // Claude Code env-info line: upstream fingerprints "powered by the model
+  // glm-<name>" (dash after glm required - glm5.3 / glm53 / non-GLM model
+  // names pass). Replace with a family-level mention.
+  [/You are powered by the model glm-[\w.\-]+/gi, "You are powered by a GLM-family model"],
+  // Hermes Agent (Nous Research) official opening sentence - refused whole,
+  // single-word edits pass.
+  [/You are Hermes Agent, an intelligent AI assistant created by Nous Research/gi, "You are an intelligent AI assistant from Nous Research"],
 ];
 
 function unflagged(text) {
