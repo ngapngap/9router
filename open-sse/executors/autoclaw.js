@@ -98,9 +98,11 @@ const FLAGGED = [
   // glm-<name>" (dash after glm required - glm5.3 / glm53 / non-GLM model
   // names pass). Replace with a family-level mention.
   [/You are powered by the model glm-[\w.\-]+/gi, "You are powered by a GLM-family model"],
-  // Hermes Agent (Nous Research) official opening sentence - refused whole,
-  // single-word edits pass.
-  [/You are Hermes Agent, an intelligent AI assistant created by Nous Research/gi, "You are an intelligent AI assistant from Nous Research"],
+  // Hermes Agent (Nous Research) official opening sentences - refused whole,
+  // single-word edits pass. Two live variants: "an intelligent AI assistant
+  // created by" and the short comma form "built by" (the comma is required for
+  // a refusal - dropping it or using a dash passes upstream).
+  [/You are Hermes Agent, (?:an intelligent AI assistant )?(?:created|built|developed|made) by Nous Research/gi, "You are an intelligent AI assistant from Nous Research"],
   // Claude Code subagent (Task-tool) opener: "You are an agent for Claude
   // Code" is refused on its own (verified live) even after the identity
   // rewrite of the first line. Reword the phrase, keep meaning.
