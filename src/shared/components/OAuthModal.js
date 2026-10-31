@@ -30,6 +30,56 @@ const PASTE_TOKEN_PROVIDERS = {
   },
 };
 
+
+// AutoClaw sign-in panel: the overseas web OAuth flow (Google/z.ai) needs a
+// localhost callback port and a browser captcha a server can't host, so the
+// sign-in takes the client's access + refresh token pasted in — from the
+// gateway export (Agent2API and friends) or the client's own storage. With
+// the refresh token 9router rotates the access forever; without, ~24h.
+function SmsTokenInput({ onDone, onError }) {
+  const [token, setToken] = useState("");
+  const [refresh, setRefresh] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const submit = async () => {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/oauth/autoclaw/exchange", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: token.trim(), refreshToken: refresh.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Sign-in failed");
+      onDone();
+    } catch (e) {
+      onError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="space-y-3 py-2">
+      <div className="text-xs text-text-muted space-y-1">
+        <p>Nếu bạn chạy Agent2API (hoặc magpie + plugin) trên máy có app AutoClaw: dùng chức năng <b>xuất accounts</b> của nó, rồi dán hai giá trị sau:</p>
+        <ol className="list-decimal ml-4 space-y-0.5">
+          <li><code className="font-mono">accessToken</code> (bắt buộc) — JWT sống ~24 giờ.</li>
+          <li><code className="font-mono">refreshToken</code> (khuyến khích) — có nó 9router tự gia hạn mãi, không cần dán lại.</li>
+        </ol>
+        <p>Trang web Google/z.ai OAuth cần localhost callback port và captcha browser mà server không thể host, nên đăng nhập web trực tiếp không dùng được từ dashboard này.</p>
+      </div>
+      <div className="flex gap-2">
+        <Input value={token} onChange={(e) => setToken(e.target.value)} placeholder="Dán accessToken (eyJ...)" className="flex-1 font-mono text-xs" />
+        <Button onClick={submit} disabled={busy || !token.trim()}>Connect</Button>
+      </div>
+      <div className="flex gap-2">
+        <Input value={refresh} onChange={(e) => setRefresh(e.target.value)} placeholder="Dán refreshToken (eyJ...) — tùy chọn nhưng nên có" className="flex-1 font-mono text-xs" />
+      </div>
+    </div>
+  );
+}
+
 /**
  * OAuth Modal Component
  * - Localhost: Auto callback via popup message
@@ -288,6 +338,8 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
         "kilocode",
         "codebuddy-cn",
         "codebuddy-intl",
+        "workbuddy",
+        "workbuddy-ai",
         "qoder",
         "qoder-cn",
         "grok-cli",
@@ -297,6 +349,16 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
         "minimax-code-global",
         "nous",
       ];
+            // AutoClaw: CN signs in with phone + SMS code; overseas takes the
+      // official client's access token pasted in. Neither opens a popup.
+      if (provider === "autoclaw") {
+        // No popup: the token is pasted into the panel below.
+        setIsDeviceCode(true);
+        setStep("input");
+        setAuthData({});
+        return;
+      }
+
       if (deviceCodeProviders.includes(provider)) {
         setIsDeviceCode(true);
         setStep("waiting");
@@ -956,6 +1018,15 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
               </div>
             )}
           </>
+        )}
+
+
+        {/* AutoClaw: CN phone + SMS code, overseas pasted client token */}
+        {isDeviceCode && provider === "autoclaw" && step === "input" && (
+          <SmsTokenInput
+            onDone={() => { setStep("success"); onSuccessRef.current?.(); }}
+            onError={(m) => { setError(m); setStep("error"); }}
+          />
         )}
 
         {/* Success Step */}

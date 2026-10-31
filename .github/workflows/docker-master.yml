@@ -1,0 +1,239 @@
+name: Build and Push Docker Image (master)
+
+# Auto-build on every push to master so `ghcr.io/ngapngap/9router:latest`
+# always matches the newest commit without cutting a version tag.
+# Numbered version tags stay exclusively with the release flow
+# (docker-publish.yml).
+
+on:
+  push:
+    branches:
+      - master
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "gitbook/**"
+      - "images/**"
+  workflow_dispatch:
+
+# Keep every master build in one FIFO queue (same policy as the release
+# flow) so `latest` always ends up pointing at the newest commit.
+concurrency:
+  group: docker-ci-${{ github.repository }}
+  cancel-in-progress: false
+
+env:
+  GHCR_IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  build:
+    name: Build ${{ matrix.platform }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            suffix: amd64
+            runner: ubuntu-24.04
+          - platform: linux/arm64
+            suffix: arm64
+            runner: ubuntu-24.04-arm
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push platform image by digest
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          outputs: type=image,name=${{ env.GHCR_IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          build-args: |
+            APP_VERSION=dev-${{ github.sha }}
+            ALPINE_MIRROR=${{ vars.ALPINE_MIRROR || 'dl-cdn.alpinelinux.org' }}
+            NPM_REGISTRY=${{ vars.NPM_REGISTRY || 'https://registry.npmjs.org/' }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=9router-ci-${{ matrix.suffix }}
+          cache-to: type=gha,mode=max,scope=9router-ci-${{ matrix.suffix }}
+          provenance: false
+          sbom: false
+
+      - name: Smoke-test platform image before publishing digest artifact
+        env:
+          GHCR_IMAGE: ${{ env.GHCR_IMAGE }}
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          set -Eeuo pipefail
+          [[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+
+          container="9router-ci-smoke-${GITHUB_RUN_ID}-${{ matrix.suffix }}"
+          trap 'docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
+
+          docker run --detach \
+            --name "$container" \
+            --platform "$PLATFORM" \
+            --publish 20128:20128 \
+            "${GHCR_IMAGE}@${IMAGE_DIGEST}"
+
+          for attempt in {1..45}; do
+            if curl --fail --silent --show-error http://127.0.0.1:20128/api/health; then
+              echo "${PLATFORM} health check passed"
+              exit 0
+            fi
+            if (( attempt % 5 == 0 )); then
+              echo "Waiting for ${PLATFORM} health check (${attempt}/45)" >&2
+            fi
+            sleep 2
+          done
+
+          echo "${PLATFORM} health check failed; container logs follow:" >&2
+          docker logs "$container" || true
+          exit 1
+
+      - name: Save image digest
+        env:
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          test -n "$IMAGE_DIGEST"
+          mkdir -p "$RUNNER_TEMP/digests"
+          printf '%s\n' "$IMAGE_DIGEST" > "$RUNNER_TEMP/digests/${{ matrix.suffix }}.txt"
+
+      - name: Upload image digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ matrix.suffix }}
+          path: ${{ runner.temp }}/digests/${{ matrix.suffix }}.txt
+          if-no-files-found: error
+
+  publish:
+    name: Publish and verify manifest
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Download platform digests
+        uses: actions/download-artifact@v4
+        with:
+          pattern: digests-*
+          path: ${{ runner.temp }}/digests
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create and verify commit manifest
+        env:
+          GHCR_IMAGE: ${{ env.GHCR_IMAGE }}
+          SHA_TAG: sha-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          digest_files=("$RUNNER_TEMP"/digests/*.txt)
+
+          if [[ "${#digest_files[@]}" -ne 2 ]]; then
+            echo "Expected two platform digests, found ${#digest_files[@]}" >&2
+            exit 1
+          fi
+
+          sources=()
+          for digest_file in "${digest_files[@]}"; do
+            digest="$(tr -d '\n' < "$digest_file")"
+            if [[ ! "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+              echo "Invalid image digest in $digest_file" >&2
+              exit 1
+            fi
+            sources+=("${GHCR_IMAGE}@${digest}")
+          done
+
+          docker buildx imagetools create \
+            --tag "${GHCR_IMAGE}:${SHA_TAG}" \
+            "${sources[@]}"
+
+          docker buildx imagetools create \
+            --tag "${GHCR_IMAGE}:latest" \
+            "${sources[@]}"
+
+          docker buildx imagetools inspect --raw "${GHCR_IMAGE}:latest" > "$RUNNER_TEMP/ci-manifest.json"
+          expected=$'linux/amd64\nlinux/arm64'
+          actual="$(jq -r '[.manifests[] | select(.platform != null and .platform.os != null and .platform.architecture != null) | "\(.platform.os)/\(.platform.architecture)"] | sort | .[]' "$RUNNER_TEMP/ci-manifest.json")"
+          if [[ "$actual" != "$expected" ]]; then
+            echo "Commit manifest platforms do not match exactly:" >&2
+            printf '%s\n' "$actual" >&2
+            exit 1
+          fi
+
+      - name: Smoke-test resolved latest manifest
+        env:
+          GHCR_IMAGE: ${{ env.GHCR_IMAGE }}
+        run: |
+          set -Eeuo pipefail
+          container="9router-ci-manifest-smoke-${GITHUB_RUN_ID}"
+          trap 'docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
+
+          docker run --detach \
+            --name "$container" \
+            --platform linux/amd64 \
+            --publish 20128:20128 \
+            "${GHCR_IMAGE}:latest"
+
+          for attempt in {1..30}; do
+            if curl --fail --silent --show-error http://127.0.0.1:20128/api/health; then
+              echo "Resolved latest manifest health check passed"
+              exit 0
+            fi
+            if (( attempt % 5 == 0 )); then
+              echo "Waiting for resolved latest health check (${attempt}/30)" >&2
+            fi
+            sleep 2
+          done
+
+          echo "Resolved latest health check failed; container logs follow:" >&2
+          docker logs "$container" || true
+          exit 1
+
+      - name: Summary
+        env:
+          GHCR_IMAGE: ${{ env.GHCR_IMAGE }}
+          SHA_TAG: sha-${{ github.sha }}
+        run: |
+          {
+            echo "### Published Docker images (master)"
+            echo "- GHCR: \`${GHCR_IMAGE}:latest\`"
+            echo "- GHCR: \`${GHCR_IMAGE}:${SHA_TAG}\`"
+            echo "- Commit: \`${GITHUB_SHA}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

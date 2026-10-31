@@ -84,9 +84,33 @@ export async function parseUpstreamError(response, executor = null) {
   }
 
   const messageStr = typeof message === "string" ? message : JSON.stringify(message);
-  const finalMessage = messageStr || DEFAULT_ERROR_MESSAGES[response.status] || `Upstream error: ${response.status}`;
+  const finalMessage = withZhipuPlanHint(messageStr, bodyText) || DEFAULT_ERROR_MESSAGES[response.status] || `Upstream error: ${response.status}`;
 
   return { statusCode: response.status, message: finalMessage };
+}
+
+/**
+ * Zhipu/Z.ai coding-plan hint (magpie parity, opencode-zcode-auth 0.1.25):
+ * a 429 code 1113 ("Insufficient balance or no resource package") on the
+ * coding endpoints means the account has no active GLM Coding Plan and no
+ * balance — ZCode's gift plans are spendable through ZCode OAuth, not via
+ * the coding-plan API key. Tell the user that instead of a bare 1113, so the
+ * fix (ZCode OAuth for gift plans, a paid plan, or a pay-as-you-go key) is
+ * actionable.
+ */
+function withZhipuPlanHint(messageStr, bodyText) {
+  if (!messageStr) return null;
+  const hay = messageStr + " " + (bodyText || "");
+  const noPlan = /\u4e0d\u5b58\u5728coding plan|no active.{0,20}coding plan/i.test(hay);
+  const noBalance = /\b1113\b/.test(hay) && /Insufficient balance|no resource package|\u4f59\u989d\u4e0d\u8db3|no active.{0,20}quota/i.test(hay);
+  if (!noPlan && !noBalance) return null;
+  if (/GLM Coding Plan/i.test(messageStr)) return messageStr; // already explained
+  return (
+    messageStr +
+    " — This Zhipu/Z.ai account has no active GLM Coding Plan (and no balance): " +
+    "ZCode's gift plans (Start Plan, weekend/referral rewards) require ZCode OAuth, not this API key. " +
+    "Sign in with GLM/ZCode OAuth to use gift allowances, buy a GLM Coding Plan, or add a pay-as-you-go API key instead."
+  );
 }
 
 /**

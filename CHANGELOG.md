@@ -16,6 +16,17 @@
 - **DeepSeek**: replace the vendored PoW hash implementation with a noble-hashes keccak port (DeepSeekHashV1, SHA3-256 with round 0 skipped), shrinking `deepseek-pow-hash.js` by ~430 lines
 - **GitHub Copilot**: apply Claude 5.5 thinking rules to Copilot's dotted model ids (`claude-opus-5.5*`, `claude-sonnet-5.5`) and make `claude-haiku-5.5` adaptive-only on its Anthropic-native shim, whose budget-shaped thinking comes back 400
 
+# v0.5.112-fork (2026-10-27)
+
+## Features
+- **ZCode**: add ZCode (Zhipu's desktop app) to the CLI Tools page — Apply writes 9router into both of ZCode's provider files (~/.zcode/v2/provider_config.json rules for ZCode 3.14+ and the config.json OpenCode-shaped entry for older builds), honoring a moved data folder (dataBaseDir) and Windows' HOME-over-USERPROFILE resolution; per-model rules carry the context window, image input, a 128k output cap, and disabled/low/medium/high reasoning levels resolved from the gateway's model capabilities
+- **ZCode**: keep what the user set by hand in ZCode across re-apply (provider name, logo/visibility and other unknown rule keys, manual model rules, an entry turned off, a hand-picked default reasoning variant), write both files atomically and private (0600), and surface the three API formats (anthropic-messages default, openai-chat-completions, openai-responses) with the user's existing choice kept
+- **Gateway**: route bare /chat/completions to the OpenAI chat lane so ZCode's openai-chat-completions provider works on a root baseURL, like /responses already does
+- **AutoClaw**: add AutoClaw as an OAuth provider — Zhipu's autoglm agent client (GLM Auto/Auto-Fast/GLM-5.3 family) over https://autoglm-api.autoglm.ai, signed like the desktop client (WAF auth headers, X-Authorization token header, per-request trace ids), with the plugin's request hygiene (official system-prompt prefix, max_tokens dropped, agent identity lines rewritten, empty tools lists dropped) and host fallback; sign-in takes the official client's access token because the web Google/z.ai OAuth needs a localhost callback and a browser captcha a server cannot host
+- **WorkBuddy**: add WorkBuddy and WorkBuddy AI as OAuth providers on the Providers page — the WorkBuddy desktop app's own sign-in (platform workbuddy/workbuddy-ai, User-Agent WorkBuddy/5.5.6, which copilot.tencent.com requires on every call) over the same CodeBuddy plan endpoints (copilot.tencent.com and www.workbuddy.ai), with dedicated stream-only executors, CodeBuddy-plan credit usage, the same model catalog, and the WorkBuddy icon
+- **WorkBuddy**: add Tencent WorkBuddy (and WorkBuddy AI) to the CLI Tools page — Apply writes 9router's models into ~/.workbuddy/models.json (~/.workbuddy-ai for the international build, WORKBUDDY_CONFIG_DIR honoured for the CN one) as OpenAI chat-completions entries WorkBuddy asks at its url under its apiKey, with the context/output caps, image input and reasoning efforts resolved from the gateway's model capabilities; everything the app itself keeps in that file (its own local models, an entry edited there, a model turned off, a hand-picked default effort) is kept on re-apply, and WorkBuddy's own rewrite of the file after start is expected and harmless
+- **GLM/ZCode**: use Start Plan, referral, weekend, and other gift allowances through ZCode OAuth when an account has no Coding Plan, preserving paid accounts; match the 0.1.32 client wire format, retry model-concurrency responses, round-trip ToolSearch, and expose per-model gift units and reset periods in Usage
+
 # v0.5.111 (2026-10-26)
 
 ## Features
@@ -52,8 +63,6 @@
 - **STT**: add Codex OAuth transcription provider (`cx/transcribe`), reusing existing Codex OAuth chat connections with 24 kHz PCM16 WAV conversion and bounded private temp files (#5074)
 
 ## Fixes
-- **CodeBuddy**: send the plugin's request/conversation id headers (`X-Request-ID`, `X-Conversation-ID`, `X-Conversation-Request-ID`, `X-Conversation-Message-ID`) on CN and intl chat requests — without them the gateway's channel check rejects every call with `400 / 11128 "request illegal"`
-- **CodeBuddy**: align the `#5024` backoff tests with the current request-scoped contract — `checkFallbackError` reports `requestScoped: true` for unclassified 4xx, and a combo now advances past a malformed CodeBuddy body instead of stopping on the first member
 - **Combos**: advance past request-scoped 4xx rejections (validation, unsupported parameter, context overflow) instead of terminating combo (#5057)
 - **Combos**: fall through to next member when streaming response returns HTTP 200 but produces zero content frames (#ca7b540)
 - **Combos**: try next model when provider returns HTTP 400 for insufficient credits or balance too low (#4713)

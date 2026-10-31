@@ -29,12 +29,15 @@ import { XiaomiMimoExecutor } from "./xiaomi-mimo.js";
 import { MimoFreeExecutor } from "./mimo-free.js";
 import { CodeBuddyExecutor } from "./codebuddy-cn.js";
 import { CodeBuddyIntlExecutor } from "./codebuddy-intl.js";
+import { WorkBuddyExecutor, WorkBuddyAiExecutor } from "./workbuddy.js";
+import { AutoClawExecutor } from "./autoclaw.js";
 import TraeExecutor from "./trae.js";
 import ZedExecutor from "./zed.js";
 import WindsurfExecutor from "./windsurf.js";
 import { DefaultExecutor } from "./default.js";
 import { MinimaxCodeExecutor } from "./minimax-code.js";
 import { DevinCliExecutor } from "./devin-cli.js";
+import { GlmExecutor } from "./glm.js";
 
 const executors = {
   antigravity: new AntigravityExecutor(),
@@ -74,12 +77,16 @@ const executors = {
   mmf: new MimoFreeExecutor(), // Alias for mimo-free
   "codebuddy-cn": new CodeBuddyExecutor(),
   "codebuddy-intl": new CodeBuddyIntlExecutor(),
+  workbuddy: new WorkBuddyExecutor(),
+  "workbuddy-ai": new WorkBuddyAiExecutor(),
+  autoclaw: new AutoClawExecutor(),
   trae: new TraeExecutor(),
   zed: new ZedExecutor(),
   windsurf: new WindsurfExecutor(),
   "minimax-code": new MinimaxCodeExecutor("minimax-code"),
   "minimax-code-global": new MinimaxCodeExecutor("minimax-code-global"),
   "devin-cli": new DevinCliExecutor(),
+  glm: new GlmExecutor(),
   bedrock: new BedrockExecutor(),
   br: new BedrockExecutor(), // Alias for bedrock
   // Second Bedrock entry for xAI's Grok, which speaks OpenAI Chat Completions rather than the

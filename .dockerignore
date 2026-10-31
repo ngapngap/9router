@@ -18,6 +18,9 @@ coverage
 data
 logs
 
+# Vendored reference docs (magpie clone, ~300MB — never shipped)
+docs_new
+
 # Local env files (inject at runtime via --env-file or -e)
 .env
 .env.local

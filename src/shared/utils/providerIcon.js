@@ -6,6 +6,8 @@ const ICON_ALIASES = {
   "gitlab-duo": "gitlab",
   "vercel-ai-gateway": "vercel",
   "ollama-search": "ollama",
+  // WorkBuddy AI is the same WorkBuddy brand mark
+  "workbuddy-ai": "workbuddy",
   // MiniMax Code rides the existing MiniMax brand mark
   "minimax-code": "minimax",
   "minimax-code-global": "minimax",

@@ -509,6 +509,76 @@ export async function refreshCopilotToken(githubAccessToken, log) {
   }, log);
 }
 
+// AutoClaw (Zhipu autoglm) refresh — POST /userapi/v1/refresh with the
+// refresh token in the body, agent-refresh fallback on 400002. The refresh
+// token is a JWT carrying device_id; SMS accounts (source_id agent*) start
+// on the CN host, Google/z.ai ones on the global one. Rotation: the new
+// refresh token replaces the old one.
+export async function refreshAutoClawToken(refreshToken, log, isCn = false) {
+  if (!refreshToken) return null;
+  return dedupRefresh(isCn ? "autoclaw-cn" : "autoclaw", refreshToken, async () => {
+    const part = refreshToken.split(".")[1];
+    let deviceId = "";
+    try {
+      deviceId = JSON.parse(Buffer.from(part.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8")).device_id || "";
+    } catch {}
+    const body = JSON.stringify({ source_id: "autoclaw", device_id: deviceId, refresh_token: refreshToken });
+    const isSms = /^agent/i.test(String((() => {
+      try {
+        return JSON.parse(Buffer.from(part.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8")).source_id || "";
+      } catch { return ""; }
+    })()));
+    const bases = isSms
+      ? ["https://autoglm-api.zhipuai.cn", "https://autoglm-api.autoglm.ai"]
+      : ["https://autoglm-api.autoglm.ai", "https://autoglm-api.zhipuai.cn"];
+    let lastMsg = "";
+    for (const base of bases) {
+      for (const path of ["/userapi/v1/refresh", "/userapi/v1/agent-refresh"]) {
+        try {
+          const response = await fetch(base + path, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Accept: "*/*",
+              "User-Agent": isCn ? "AutoClaw/2.1.0 (linux-x64)" : "AutoClaw/1.18.1 (linux-x64)",
+              "X-Version": isCn ? "2.1.0" : "1.18.1",
+              "X-Tm": "linux-x64",
+              "X-Product": "autoclaw",
+              "X-Auth-Appid": "100003",
+              "X-Auth-TimeStamp": String(Math.floor(Date.now() / 1000)),
+            },
+            body,
+          });
+          const data = await response.json().catch(() => null);
+          if (data?.code === 0 && data.data?.access_token) {
+            const access = String(data.data.access_token).replace(/^bearer /i, "").trim();
+            const refresh = String(data.data.refresh_token ?? "").replace(/^bearer /i, "").trim();
+            let exp;
+            try {
+              const p = access.split(".")[1];
+              exp = JSON.parse(Buffer.from(p.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8")).exp;
+            } catch {}
+            log?.info?.("TOKEN_REFRESH", "Successfully refreshed AutoClaw token");
+            return {
+              accessToken: access,
+              refreshToken: refresh || refreshToken,
+              expiresAt: typeof exp === "number" && exp > 0 ? exp * 1000 - 10 * 60 * 1000 : Date.now() + 5 * 3600 * 1000,
+            };
+          }
+          lastMsg = data?.msg ?? data?.message ?? "code " + data?.code;
+          // 400002 says the agent-refresh endpoint is the one; anything else
+          // stops the host loop (except the 400000 rotate-again hint).
+          if (data?.code !== 400002 && data?.code !== 400000) break;
+        } catch (error) {
+          lastMsg = error.message;
+        }
+      }
+    }
+    log?.error?.("TOKEN_REFRESH", "AutoClaw token refresh failed", { error: lastMsg });
+    return null;
+  });
+}
+
 // CodeBuddy (Tencent) refresh — POST /v2/plugin/auth/token/refresh with the
 // refresh token carried in the X-Refresh-Token header (not a form body),
 // matching the official CodeBuddy CLI. Response: { code: 0, data: <token> }.
