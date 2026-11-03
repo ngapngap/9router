@@ -33,6 +33,7 @@ import { stripUnsupportedModalities } from "../translator/concerns/modality.js";
 import { prefetchRemoteImages } from "../translator/concerns/prefetch.js";
 import { defaultClaudeToolType, shouldDefaultClaudeToolType } from "../translator/concerns/toolCall.js";
 import { resolveSessionId } from "../utils/sessionManager.js";
+import { asUpstreamError } from "../utils/upstreamError.js";
 
 /**
  * Core chat handler - shared between SSE and Worker
@@ -128,14 +129,23 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
   // before targetFormat is picked so the response translator follows.
   if (provider === "glm" && credentials?.providerSpecificData?.zcodeJwtToken) {
     try {
-      const { resolveGlmPlanMode, startPlanConfig } = await import("../services/zcodeStart.js");
+      const { resolveGlmPlanMode, startPlanConfig, emptyStreamCooldownRemainingMs } = await import("../services/zcodeStart.js");
       const startCfg = startPlanConfig(provider);
-      const { start } = await resolveGlmPlanMode(provider, credentials, buildConnectionProxyOptions(credentials), log);
+      // An account whose Start-Plan stream just ended with no content stays off the zcode
+      // route for a short cooldown (markEmptyStream). The request then uses the account's
+      // ordinary z.ai transport, or the account selector picks another account next turn.
+      // resolveGlmPlanMode itself reports start:false for a cooled account; the explicit
+      // check only keeps the debug line below without re-reading the session clock.
+      const cooledForMs = emptyStreamCooldownRemainingMs(provider, credentials);
+      const { start } = cooledForMs > 0
+        ? { start: false }
+        : await resolveGlmPlanMode(provider, credentials, buildConnectionProxyOptions(credentials), log);
       if (start && startCfg) {
         useTransport = { format: "claude", baseUrl: startCfg.baseUrl };
         credentials.zcodeStartPlan = true;
       } else {
         delete credentials.zcodeStartPlan;
+        if (cooledForMs > 0) log?.debug?.("ZCODE", `start-plan skipped for ${Math.ceil(cooledForMs / 1000)}s after an empty stream`);
       }
     } catch (e) {
       delete credentials.zcodeStartPlan;
@@ -442,29 +452,38 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
       toolNameMap = new Map([...(toolNameMap || []), ...renamedToolNames]);
     }
     reqLogger.logTargetRequest(providerUrl, providerHeaders, finalBody);
-  } catch (error) {
-    trackPendingRequest(model, provider, connectionId, false, true);
-    appendRequestLog({ model, provider, connectionId, status: `FAILED ${error.name === "AbortError" ? 499 : HTTP_STATUS.BAD_GATEWAY}` }).catch(() => { });
-    saveRequestDetail(buildRequestDetail({
-      provider, model, connectionId,
-      latency: { ttft: 0, total: Date.now() - requestStartTime },
-      tokens: { prompt_tokens: 0, completion_tokens: 0 },
-      request: extractRequestConfig(body, stream),
-      providerRequest: translatedBody || null,
-      response: { error: error.message || String(error), status: error.name === "AbortError" ? 499 : 502, thinking: null },
-      pxpipe: pxpipeSummary,
-      status: "error"
-    })).catch(() => { });
+  } catch (thrown) {
+    // An executor may raise an upstream refusal that only exists as a Response
+    // (e.g. Z.ai's HTTP 200 + {code:1005}). Adopt it as the provider response so
+    // it flows through token refresh, the ERROR line and account fallback.
+    const upstream = asUpstreamError(thrown);
+    if (upstream) {
+      providerResponse = upstream.response;
+    } else {
+      const error = thrown;
+      trackPendingRequest(model, provider, connectionId, false, true);
+      appendRequestLog({ model, provider, connectionId, status: `FAILED ${error.name === "AbortError" ? 499 : HTTP_STATUS.BAD_GATEWAY}` }).catch(() => { });
+      saveRequestDetail(buildRequestDetail({
+        provider, model, connectionId,
+        latency: { ttft: 0, total: Date.now() - requestStartTime },
+        tokens: { prompt_tokens: 0, completion_tokens: 0 },
+        request: extractRequestConfig(body, stream),
+        providerRequest: translatedBody || null,
+        response: { error: error.message || String(error), status: error.name === "AbortError" ? 499 : 502, thinking: null },
+        pxpipe: pxpipeSummary,
+        status: "error"
+      })).catch(() => { });
 
-    if (error.name === "AbortError") {
-      streamController.handleError(error);
-      return createErrorResult(499, "Request aborted");
+      if (error.name === "AbortError") {
+        streamController.handleError(error);
+        return createErrorResult(499, "Request aborted");
+      }
+      const errMsg = formatProviderError(error, provider, model, HTTP_STATUS.BAD_GATEWAY);
+      if (log?.errorLine) {
+        log.errorLine(reqTag, "✗", `ERROR 502 · ${provider}/${model} · ${Date.now() - requestStartTime}ms\n    ${errMsg}${error.stack ? `\n    ${error.stack}` : ""}`);
+      }
+      return createErrorResult(HTTP_STATUS.BAD_GATEWAY, errMsg);
     }
-    const errMsg = formatProviderError(error, provider, model, HTTP_STATUS.BAD_GATEWAY);
-    if (log?.errorLine) {
-      log.errorLine(reqTag, "✗", `ERROR 502 · ${provider}/${model} · ${Date.now() - requestStartTime}ms\n    ${errMsg}${error.stack ? `\n    ${error.stack}` : ""}`);
-    }
-    return createErrorResult(HTTP_STATUS.BAD_GATEWAY, errMsg);
   }
 
   // Handle 401/403 - try token refresh (skip for noAuth providers)
@@ -561,8 +580,8 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
   }
 
   // Streaming response
-  const { onStreamComplete, streamDetailId } = buildOnStreamComplete({ ...sharedCtx });
-  return handleStreamingResponse({ ...sharedCtx, providerResponse, sourceFormat, targetFormat: providerResponseFormat, userAgent, reqLogger, toolNameMap, customToolNames, streamController, onStreamComplete, streamDetailId, credentials });
+  const { onStreamComplete, trackTruncation, streamDetailId } = buildOnStreamComplete({ ...sharedCtx });
+  return handleStreamingResponse({ ...sharedCtx, providerResponse, sourceFormat, targetFormat: providerResponseFormat, userAgent, reqLogger, toolNameMap, customToolNames, streamController, onStreamComplete, onTruncated: trackTruncation, streamDetailId, credentials });
 }
 
 export function isTokenExpiringSoon(expiresAt, bufferMs = 5 * 60 * 1000) {

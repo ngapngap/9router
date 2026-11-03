@@ -30,8 +30,9 @@ export function buildAbortedResponsesTerminalBytes() {
   return sharedEncoder.encode(`${formatIncompleteOpenAIResponsesStreamFailure()}data: [DONE]\n\n`);
 }
 
-// Synthesize a response.failed event for streams that close without a terminal event
-export function formatIncompleteOpenAIResponsesStreamFailure() {
+// Synthesize a response.failed event for streams that close without a terminal event.
+// `message` lets a caller say why (e.g. a truncated answer) instead of the generic text.
+export function formatIncompleteOpenAIResponsesStreamFailure(message = null) {
   return formatSSE({
     event: "response.failed",
     data: {
@@ -42,7 +43,7 @@ export function formatIncompleteOpenAIResponsesStreamFailure() {
         error: {
           type: "stream_error",
           code: "stream_disconnected",
-          message: "stream closed before response.completed"
+          message: message || "stream closed before response.completed"
         }
       }
     }

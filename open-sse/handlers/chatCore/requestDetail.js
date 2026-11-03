@@ -97,8 +97,14 @@ export function buildRequestDetail(base, overrides = {}) {
   };
 }
 
+// Suffix for a turn that produced no output tokens at all. The completion callback cannot
+// tell "empty upstream stream" from "aborted before any delta", so it says both: either way
+// the client got nothing, and the marker is what makes these turns greppable in docker logs.
+export const NO_OUTPUT_MARKER = "· EMPTY/ABORTED";
+export const TRUNCATED_MARKER = "· TRUNCATED";
+
 // Build the "done" summary: duration, ttft, in/out tokens with cache breakdown
-export function formatDoneLine({ usage, latency }) {
+export function formatDoneLine({ usage, latency, truncated = false }) {
   const u = usage || {};
   const inTok = u.prompt_tokens ?? u.input_tokens ?? 0;
   const outTok = u.completion_tokens ?? u.output_tokens ?? 0;
@@ -112,7 +118,10 @@ export function formatDoneLine({ usage, latency }) {
     inStr += ` (CACHE ${parts.join(" ")})`;
   }
   const ttftStr = latency?.ttft ? ` · TTFT ${latency.ttft}ms` : "";
-  return `DONE ${latency?.total ?? 0}ms${ttftStr} · ${inStr} · OUT ${outTok}`;
+  // OUT 0 on a streamed turn means the upstream closed before delivering a single token:
+  // exactly the glm empty-stream failure. A no-op marker for turns with output.
+  const emptyStr = outTok === 0 ? ` ${NO_OUTPUT_MARKER}` : (truncated ? ` ${TRUNCATED_MARKER}` : "");
+  return `DONE ${latency?.total ?? 0}ms${ttftStr} · ${inStr} · OUT ${outTok}${emptyStr}`;
 }
 
 export function saveUsageStats({ provider, model, tokens, connectionId, apiKey, endpoint, label = "USAGE", silent = false }) {

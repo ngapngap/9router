@@ -3,17 +3,45 @@
  */
 
 import { checkFallbackError, formatRetryAfter } from "./accountFallback.js";
-import { unavailableResponse } from "../utils/error.js";
+import { unavailableResponse, errorResponse } from "../utils/error.js";
+import { EMPTY_STREAM_ABORTED_MESSAGE, HTTP_STATUS } from "../config/runtimeConfig.js";
 import { getCapabilitiesForModel } from "../providers/capabilities.js";
 import { parseModel } from "./model.js";
+import { getExecutor } from "../executors/index.js";
 import { extractTextContent } from "../translator/formats/gemini.js";
 import { peekStreamForContent, reconstructStream, isNoRetryFinish } from "./emptyFailover.js";
+import { OPENAI_FINISH } from "../translator/schema/finishReasons.js";
 import {
   getStickyComboModel,
   setStickyComboModel,
   clearStickyComboSession,
   orderModelsByChoice,
 } from "./systemoneRouter.js";
+
+// Reason label for a stream that carried no content delta and no finish frame (the peek
+// reports no finishReason). Mirrors emptyFailover's vocabulary.
+const NO_CONTENT_REASON = "no-content";
+
+// A candidate the peek reports as having finished without any text: either no finish frame
+// at all (reasonLabel above) or a `stop` delivered with zero deltas. Healthy turns spend the
+// peek window in prefill, so an empty `stop` is the abandoned-turn shape — the upstream
+// closed right after the role frame — not a legitimately empty answer. A `length` cut and
+// tool-call-only turns still count as content in the peek and never reach this branch.
+const ABANDONED_FINISHES = new Set([NO_CONTENT_REASON, OPENAI_FINISH.STOP]);
+
+// Combo candidates are `provider/model` strings; the account behind a turn is only known
+// to the executor, so the executor exposes the mark as a self-bound hook on the memoized
+// executor instance it ran with (GlmExecutor.markLastRequestAccountEmptyStream).
+function markAccountEmptyStream(provider, { model, log }) {
+  try {
+    const executor = getExecutor(provider);
+    if (!executor?.markLastRequestAccountEmptyStream) return;
+    const marked = executor.markLastRequestAccountEmptyStream();
+    log?.debug?.("COMBO", `${model} empty stream: start-plan cooldown ${marked ? "set" : "skipped"}`);
+  } catch (err) {
+    log?.debug?.("COMBO", `${model} empty stream: cooldown mark failed: ${err?.message || err}`);
+  }
+}
 
 // Peek a 2xx combo response for real content. Returns null for non-SSE responses (leave
 // them untouched). For SSE, returns { outcome: "content"|"empty", finishReason, response }
@@ -528,14 +556,32 @@ export async function handleComboChat({
           return peeked.response;
         }
 
-        // Empty generation. Fall through to the next candidate unless this is a legitimately
-        // empty class (content filter) or the last candidate — in which case return the
-        // (empty) response as-is, preserving prior behaviour rather than manufacturing a 5xx.
-        const reasonLabel = peeked.finishReason || "no-content";
+        // Empty generation. Two different failures share this branch:
+        // - no-retry classes (content filter, refused): a real, finished empty answer that
+        //   the client should render as-is;
+        // - no-content: the stream closed before ANY delta — notably "no content and no
+        //   finish frame at all" (upstream dropped during prefill). That is a broken turn:
+        //   a 200 with an empty body renders as an empty answer, so it gets a 502 the
+        //   client can retry instead.
+        const reasonLabel = peeked.finishReason || NO_CONTENT_REASON;
         const isLast = i === rotatedModels.length - 1;
-        if (isNoRetryFinish(peeked.finishReason) || isLast) {
-          log.warn("COMBO", `Model ${modelStr} returned empty (${reasonLabel}) — ${isNoRetryFinish(peeked.finishReason) ? "no-retry class" : "last candidate"}, returning as-is`);
+        const noRetryClass = isNoRetryFinish(peeked.finishReason);
+        const abandoned = !noRetryClass && ABANDONED_FINISHES.has(String(reasonLabel).toLowerCase());
+        if (abandoned) {
+          // Keep the account's Start-Plan route off the next turns (see zcodeStart.js).
+          const provider = parseModel(modelStr)?.provider;
+          if (provider) {
+            markAccountEmptyStream(provider, { model: modelStr, log });
+          }
+        }
+        if (noRetryClass || (isLast && !abandoned)) {
+          log.warn("COMBO", `Model ${modelStr} returned empty (${reasonLabel}) — ${noRetryClass ? "no-retry class" : "last candidate"}, returning as-is`);
           return peeked.response;
+        }
+        if (isLast && abandoned) {
+          peeked.response.body?.cancel?.().catch(() => {});
+          log.warn("COMBO", `Model ${modelStr} returned empty (${reasonLabel}) — last candidate, answering ${HTTP_STATUS.BAD_GATEWAY}`);
+          return errorResponse(HTTP_STATUS.BAD_GATEWAY, EMPTY_STREAM_ABORTED_MESSAGE);
         }
 
         log.warn("COMBO", `Model ${modelStr} returned empty (${reasonLabel}) — falling through to next candidate`);

@@ -60,6 +60,22 @@ export const STREAM_FIRST_CHUNK_TIMEOUT_MS = envMs("STREAM_FIRST_CHUNK_TIMEOUT_M
 // Env: EMPTY_PEEK_DEADLINE_MS.
 export const EMPTY_PEEK_DEADLINE_MS = envMs("EMPTY_PEEK_DEADLINE_MS", 45 * 1000);
 
+// GLM Start Plan empty-stream cooldown: an account whose Start-Plan stream ended with no
+// content frame at all (prefill-only, upstream closed early) is skipped for this long so the
+// combo re-picks the account on its next turn instead of eating the same abort again.
+// Env: GLM_EMPTY_STREAM_COOLDOWN_MS.
+export const GLM_EMPTY_STREAM_COOLDOWN_MS = envMs("GLM_EMPTY_STREAM_COOLDOWN_MS", 3 * 60_000);
+
+// The combo gives up on an entirely content-less 2xx stream with this 502 instead of a 200
+// carrying nothing, so the client retries. Fixed text on purpose: it reaches the client and
+// must not be operator-tunable. Env: (none).
+export const EMPTY_STREAM_ABORTED_MESSAGE = "upstream stream ended with no content";
+
+// A stream that produced content and then ended before its terminal frame (finish_reason /
+// message_delta / response.completed) is truncated: the client gets this error frame instead
+// of a fabricated finish_reason "stop". Fixed text on purpose (same reason). Env: (none).
+export const TRUNCATED_STREAM_MESSAGE = "upstream stream ended before the response completed";
+
 // Fetch connect timeout: abort if upstream doesn't return response headers within this duration
 export const FETCH_CONNECT_TIMEOUT_MS = envMs("FETCH_CONNECT_TIMEOUT_MS", 60 * 1000);
 

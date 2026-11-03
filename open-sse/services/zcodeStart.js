@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import * as machineIdPkg from "node-machine-id";
 import { proxyAwareFetch } from "../utils/proxyFetch.js";
 import { PROVIDERS } from "../providers/index.js";
+import { GLM_EMPTY_STREAM_COOLDOWN_MS } from "../config/runtimeConfig.js";
 
 // ZCode Start Plan support, ported from magpie's retired zcode built-in.
 // Coding-plan requests keep using api.z.ai and the account's API key. Start
@@ -191,6 +192,45 @@ function decisionKey(provider, credentials) {
 
 export function invalidateGlmPlanMode(provider, credentials) {
   decisions.delete(decisionKey(provider, credentials));
+  emptyStreamUntil.delete(decisionKey(provider, credentials));
+}
+
+// Start-Plan accounts whose stream just ended with no content at all (upstream closed
+// during prefill). The account is fine for other routes and the fault may be transient,
+// so this is a short cooldown, not a removal: until it expires the executor skips its
+// zcode route so the request takes the account's normal z.ai path (or another account
+// if the selector is choosing). Keyed like `decisions` so it is per account + per JWT.
+const emptyStreamUntil = new Map();
+
+// Mark the account used by `credentials` as empty-stream cooled for `cooldownMs`.
+export function markEmptyStream(provider, credentials, cooldownMs = GLM_EMPTY_STREAM_COOLDOWN_MS) {
+  if (!provider || !cooldownMs || cooldownMs <= 0) return 0;
+  // Nothing to key on: never cooldown "every anonymous credential" under one entry.
+  if (!(credentials?.apiKey || credentials?.accessToken)) return 0;
+  const until = Date.now() + cooldownMs;
+  emptyStreamUntil.set(decisionKey(provider, credentials), until);
+  return until;
+}
+
+// Seconds left on the account's cooldown (0 when it is not cooled).
+export function emptyStreamCooldownRemainingMs(provider, credentials) {
+  const until = emptyStreamUntil.get(decisionKey(provider, credentials));
+  if (!until) return 0;
+  const remaining = until - Date.now();
+  if (remaining <= 0) {
+    emptyStreamUntil.delete(decisionKey(provider, credentials));
+    return 0;
+  }
+  return remaining;
+}
+
+export function isEmptyStreamCooledDown(provider, credentials) {
+  return emptyStreamCooldownRemainingMs(provider, credentials) > 0;
+}
+
+// Drop a cooldown once the account proved healthy again (or for tests/reset).
+export function clearEmptyStream(provider, credentials) {
+  emptyStreamUntil.delete(decisionKey(provider, credentials));
 }
 
 // Decide per account, with magpie's sure/unsure TTLs. An expired JWT is still
@@ -199,6 +239,10 @@ export function invalidateGlmPlanMode(provider, credentials) {
 export async function resolveGlmPlanMode(provider, credentials, proxyOptions = null, log = null) {
   const jwt = credentials?.providerSpecificData?.zcodeJwtToken;
   if (!jwt) return { start: false };
+  // A cooled account keeps its Start-Plan entitlement but must not be routed there again
+  // within the cooldown window, so report "not start" before touching (and re-caching) the
+  // subscription decision — otherwise the cooldown would only be enforced by the caller.
+  if (isEmptyStreamCooledDown(provider, credentials)) return { start: false, cooledDown: true };
   const key = credentials?.apiKey || credentials?.accessToken || "";
   if (!key) return { start: true };
 

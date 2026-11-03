@@ -7,6 +7,8 @@ import {
   zcodeSessionId,
   renameZcodeToolSearch,
   invalidateGlmPlanMode,
+  markEmptyStream,
+  isEmptyStreamCooledDown,
   ZCODE_TOOL_SEARCH,
   ZCODE_TOOL_SEARCH_ALIAS,
 } from "../services/zcodeStart.js";
@@ -23,7 +25,48 @@ const START_RESTRICTED = "ZCode's risk control blocked this account for unusual 
 const START_EDGE = "ZCode's network firewall blocked requests from this IP; wait a while, or switch to another network or proxy.";
 const OVERRIDE_HEADERS = new Set(["content-type", "anthropic-version", "accept", "accept-encoding"]);
 
+// Z.ai answers a request it will not serve with HTTP 200 and an application-level
+// `{code,msg}` envelope instead of an Anthropic message. 1005 is the Start Plan's
+// "this account has no grant left" (the same answer the balance endpoint gives
+// when `plans` is empty). Without this mapping the turn completes as a success
+// with zero tokens — the empty reply clients see — so every refusal in the table
+// below is raised as a real HTTP error: the client fails loudly and the account
+// pool falls back instead of silently answering nothing.
+const START_APP_ERROR_STATUS = [
+  { match: /^1005$/, message: "ZCode Start Plan has no remaining quota for this account (code 1005 exceed quota limit)" },
+  { match: /^1006$/, message: "ZCode Start Plan quota is exhausted for today (code 1006)" },
+  { match: /^3011$/, message: "ZCode rejected the Start Plan request (code 3011); sign in to ZCode again if this persists" },
+];
+const APP_ERROR_CODE = /^\d{3,5}$/;
+
+// App-level error envelope → status. Returns null when the body is a normal
+// Anthropic message (no `code`), an SSE stream, or a code we do not know.
+function startAppError(status, text) {
+  const trimmed = String(text || "").trim();
+  if (!trimmed.startsWith("{") || trimmed.startsWith('{"type"')) return null;
+  let body;
+  try {
+    body = JSON.parse(trimmed);
+  } catch {
+    return null;
+  }
+  const code = body?.code;
+  if (code == null || typeof code === "object" || !APP_ERROR_CODE.test(String(code).trim())) return null;
+  const scalar = (value) => (value == null || typeof value === "object" ? "" : String(value));
+  const msg = scalar(body.msg) || scalar(body.message) || "ZCode refused the request";
+  const known = START_APP_ERROR_STATUS.find((entry) => entry.match.test(String(code).trim()));
+  return {
+    status: known ? 429 : (status >= 400 ? status : 502),
+    message: known ? known.message : `ZCode error ${code}: ${msg}`,
+  };
+}
+
 function onStart(credentials) {
+  // `zcodeStartPlan` is set by the chat core only when the plan decision holds, and it is
+  // never set while the account sits in its empty-stream cooldown. Re-checking the cooldown
+  // here keeps every entry point (buildUrl, headers, execute) on the account's normal z.ai
+  // transport even if a caller cached `zcodeStartPlan` before the cooldown was marked.
+  if (credentials && isEmptyStreamCooledDown("glm", credentials)) return false;
   return Boolean(credentials?.zcodeStartPlan && credentials?.providerSpecificData?.zcodeJwtToken);
 }
 
@@ -162,9 +205,40 @@ async function restoreToolSearchResponse(response) {
   return response;
 }
 
+// Apply startAppError() to a response: read the body once, hand back either an
+// errorResponse carrying the real status or a byte-identical clone.
+async function withStartAppError(response) {
+  if (!response || !response.body) return response;
+  const contentType = (response.headers.get("content-type") || "").toLowerCase();
+  // Only a JSON body can be an app-level envelope; never buffer an SSE stream.
+  if (contentType.includes("text/event-stream")) return response;
+  const text = await response.text();
+  const appError = startAppError(response.status, text);
+  if (!appError) return responseWithText(response, text);
+  return errorResponse(appError.status, appError.message);
+}
+
 export class GlmExecutor extends DefaultExecutor {
   constructor(provider = "glm") {
     super(provider);
+    // Account of the most recent Start-Plan turn, set at the top of execute().
+    this._lastStartAccount = null;
+    this.markLastRequestAccountEmptyStream = this.markLastRequestAccountEmptyStream.bind(this);
+  }
+
+  // Cool down the Start-Plan account of the last turn after its stream ended with no
+  // content at all (see zcodeStart.markEmptyStream). Returns true when a cooldown was set.
+  markLastRequestAccountEmptyStream() {
+    if (!this._lastStartAccount) return false;
+    return markEmptyStream(this.provider, this._lastStartAccount) > 0;
+  }
+
+  // Start Plan owns exactly one endpoint: base.js iterates
+  // `getBaseUrls().length || 1` URLs and returns the LAST url's error when every
+  // one fails, so a second (unrelated) mirror URL would replace the Start Plan
+  // refusal — the quota error the executor just built — with its own.
+  getFallbackCount() {
+    return 1;
   }
 
   buildUrl(model, stream, urlIndex = 0, credentials = null) {
@@ -227,6 +301,13 @@ export class GlmExecutor extends DefaultExecutor {
       ...credentials,
       zcodeSessionId: zcodeSessionId(options.providerSessionId),
     };
+    // Remember which account this turn ran on, so an empty stream reported later (the
+    // combo peeks the response after the executor returned) can cool exactly that account
+    // down. Bound at construction: the combo only reaches the memoized executor instance.
+    // Instance state, so a concurrent Start-Plan turn on another account can overwrite it
+    // between execute() and the peek; the worst case is a cooldown on the wrong Start-Plan
+    // account, which only deprioritises its zcode route for a few minutes.
+    this._lastStartAccount = requestCredentials;
     let executeOptions = { ...options, credentials: requestCredentials };
     if (options.providerOverrides) {
       const headers = {};
@@ -257,6 +338,15 @@ export class GlmExecutor extends DefaultExecutor {
         // A newly purchased Coding Plan must be discovered on the next try.
         invalidateGlmPlanMode(this.provider, credentials);
       }
+      // A 200 + `{code,msg}` refusal carries no message: surface it as the real
+      // status so this request reports an ERROR instead of an empty success.
+      const appError = startAppError(response.status, text);
+      if (appError) {
+        // The plan state this account was routed on is no longer true.
+        invalidateGlmPlanMode(this.provider, credentials);
+        result = { ...result, response: errorResponse(appError.status, appError.message) };
+        break;
+      }
       result = { ...result, response: responseWithText(response, text) };
       break;
     }
@@ -266,6 +356,14 @@ export class GlmExecutor extends DefaultExecutor {
     }
     // proxyAwareFetch/undici uses HTTP/1.1 unless allowH2 is explicitly set;
     // no executor or proxy dispatcher in this repo enables it for this path.
+    //
+    // An app-level refusal arrives as a 2xx, so it never reaches the loop above.
+    // The pass below rewrites such a response into a real 4xx/5xx; a genuine
+    // Anthropic message or SSE stream never matches `startAppError` and is
+    // returned with its body intact.
+    // Stamp the account on the result too: a caller that still holds it (e.g. a fallback
+    // chain caching per-account results) can cool the right account without the field.
+    result = { ...result, response: await withStartAppError(result.response), lastStartAccount: requestCredentials };
     return result;
   }
 }

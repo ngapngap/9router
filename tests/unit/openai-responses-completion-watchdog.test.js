@@ -48,6 +48,10 @@ describe("pending response.completed watchdog", () => {
     vi.useFakeTimers();
     try {
       const { source, reader } = await pipe();
+      // Read concurrently, like a real client: the transform only runs for a chunk once
+      // something is waiting on the readable side, so the choke must not come from a
+      // read started only after the timers were advanced.
+      const collected = readAll(reader);
       source.enqueue(encoder.encode(`data: ${JSON.stringify(FINISH_CHUNK)}\n\n`));
       await vi.advanceTimersByTimeAsync(20);
 
@@ -55,7 +59,7 @@ describe("pending response.completed watchdog", () => {
       await vi.advanceTimersByTimeAsync(3000);
       source.close();
 
-      const completed = completedResponses(await readAll(reader));
+      const completed = completedResponses(await collected);
       expect(completed.length, "exactly one response.completed").toBe(1);
       expect(completed[0].status).toBe("completed");
       expect(completed[0].usage, "no usage was ever reported").toBeUndefined();

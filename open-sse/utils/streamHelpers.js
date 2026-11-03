@@ -190,3 +190,25 @@ export function buildStreamErrorBytes(statusCode, message, clientFormat) {
 
   return sharedEncoder.encode(sse);
 }
+
+// Emit a terminal error frame from inside a transform (the truncation path in stream.js).
+// Same framing as buildStreamErrorBytes for OpenAI chat (error object, then [DONE]) and
+// Claude (`event: error`); an OpenAI Responses stream gets the error message on its
+// response.failed event, since a bare `{error}` object is not a Responses event.
+export function emitStreamErrorFrame(controller, statusCode, message, clientFormat) {
+  if (clientFormat === FORMATS.OPENAI_RESPONSES) {
+    return responsesFailureSse(message).then((sse) => {
+      controller.enqueue(sharedEncoder.encode(sse + SSE_DONE));
+    });
+  }
+  controller.enqueue(buildStreamErrorBytes(statusCode, message, clientFormat));
+  return Promise.resolve();
+}
+
+// Declared LAST and dynamically imported on first use: responsesStreamHelpers imports
+// formatSSE from this module, so a static import here would be a load-order cycle.
+let incompleteResponsesFailure = null;
+function responsesFailureSse(message) {
+  incompleteResponsesFailure ||= import("./responsesStreamHelpers.js").then((m) => m.formatIncompleteOpenAIResponsesStreamFailure);
+  return incompleteResponsesFailure.then((fn) => fn(message));
+}
