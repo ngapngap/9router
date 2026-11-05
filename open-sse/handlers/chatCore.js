@@ -486,8 +486,15 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
     }
   }
 
-  // Handle 401/403 - try token refresh (skip for noAuth providers)
-  if (!executor.noAuth && (providerResponse.status === HTTP_STATUS.UNAUTHORIZED || providerResponse.status === HTTP_STATUS.FORBIDDEN)) {
+  // Handle 401/403 - try token refresh (skip for noAuth providers).
+  // A refused account (no points, plan does not include the model) answers 401/403
+  // but is not refreshed into health: the executor that parsed it says so, and
+  // refreshing would spend a token round-trip plus an identical retry on the same
+  // dead account before the account loop is even reached.
+  const refusedWithoutRefresh = typeof executor.lastRefusalWasPaywall === "function"
+    && executor.lastRefusalWasPaywall();
+  if (!executor.noAuth && !refusedWithoutRefresh
+    && (providerResponse.status === HTTP_STATUS.UNAUTHORIZED || providerResponse.status === HTTP_STATUS.FORBIDDEN)) {
     try {
       // Mutate credentials after each successful refresh: rotating refresh_token
       // providers (xAI/grok-cli) issue a new RT on every refresh; without this,

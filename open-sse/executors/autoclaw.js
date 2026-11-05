@@ -21,7 +21,20 @@ const CHAT_PATH = "/autoclaw-proxy/proxy/autoclaw/v1/chat/completions";
 const CN_CHAT_PATH = "/autoclaw-proxy/proxy/autoclaw/chat/completions";
 const OFFICIAL_SYSTEM_PROMPT = "You are AutoClaw. Answer the user directly and concisely.";
 
-const QUOTA_WORDS = /额度|余额不足|用完|用尽|quota|insufficient[_ ]?(balance|credit)|exhausted/i;
+// "insufficient" alone is not enough: the wallet refusal is "Insufficient points",
+// which the old balance/credit-only alternative missed and left as a bare 402 —
+// an account with no points was then retried for the full COOLDOWN.long window.
+const QUOTA_WORDS = /额度|余额|积分|用完|用尽|quota|insufficient[_ ]?(balance|credit|point|fund)|exhausted/i;
+// AutoClaw answers a paywalled model with HTTP 403 and an action envelope instead of
+// a quota code: {"action":{"kind":"pay-view"},"code":810001,"image_url":"…",
+// "message":"We're experiencing high demand right now. Please try again shortly, or
+// upgrade to a monthly subscription for priority access."} — i.e. this plan does not
+// include the model. It is an account-level refusal, not a transient overload, so it
+// must not be retried on the same account after a token refresh.
+const PAYWALL_CODE = "810001";
+const PAYVIEW_KINDS = new Set(["pay-view", "pay-cn", "upgrade", "subscribe"]);
+// How long a parsed refusal is remembered as "the last error" for the refresh shortcut.
+const REFUSAL_MEMORY_MS = 30 * 1000;
 const BANNED_WORDS = /\bbanned\b|封禁|封号|账号异常|账户异常|account (has been |is |was )?(suspended|frozen|disabled|blocked|restricted)/i;
 
 function md5Hex(input) {
@@ -222,6 +235,8 @@ async function refusedNotSignIn(res) {
 
 class AutoClawExecutorBase extends DefaultExecutor {
   parseError(response, bodyText) {
+    const paywall = this.readPaywall(response, bodyText);
+    if (paywall) return paywall;
     if (response?.status === 406) {
       console.error("[AutoClaw] 406 body:", JSON.stringify(String(bodyText || ""))); 
       console.error("[AutoClaw] 406 system-prompt sent:", String(this.__lastSystem || "").slice(0, 800));
@@ -244,6 +259,51 @@ class AutoClawExecutorBase extends DefaultExecutor {
 }
 
 export class AutoClawExecutor extends AutoClawExecutorBase {
+  /**
+   * True when the last error this executor produced was a paywall / no-points refusal.
+   * A refused account answers the same way after a token refresh, so chatCore must
+   * not spend a refresh and a duplicate request on it.
+   */
+  lastRefusalWasPaywall(withinMs = REFUSAL_MEMORY_MS) {
+    return Boolean(this.lastPaywall && Date.now() - this.lastPaywall <= withinMs);
+  }
+
+  /**
+   * A paywall / no-points refusal, or null.
+   *
+   * Both AutoClaw refusals are account-scoped and NOT recoverable by refreshing the
+   * token: a 403 pay-view (plan does not include the model) and a 402 "Insufficient
+   * points". Reporting them as 401/403/402 makes chatCore spend a token refresh and
+   * an identical retry on the same dead account before the account loop ever sees
+   * the error. They are reported as 429 instead — the one status the account loop
+   * treats as "this account cannot serve it, move on" — the same normalisation
+   * minimax-code applies to its credit refusals.
+   */
+  readPaywall(response, bodyText) {
+    const status = Number(response?.status);
+    if (status !== 402 && status !== 403) return null;
+    let message = "";
+    let code = null;
+    let kind = null;
+    try {
+      const d = JSON.parse(String(bodyText || ""));
+      message = String(d?.message ?? d?.msg ?? d?.error?.message ?? "").trim();
+      code = d?.code ?? d?.error?.code ?? null;
+      kind = d?.action?.kind ?? d?.error?.action?.kind ?? null;
+    } catch { /* not JSON: fall through to the word list below */ }
+
+    const paywall = String(code) === PAYWALL_CODE
+      || (kind && PAYVIEW_KINDS.has(String(kind)))
+      || QUOTA_WORDS.test(message);
+    if (!paywall) return null;
+    this.lastPaywall = Date.now();
+    return {
+      status: 429,
+      message: "AutoClaw: " + (message || (kind === "pay-view" ? "plan does not include this model" : "no quota left on this account")),
+      resetsAtMs: null,
+    };
+  }
+
   constructor() {
     super("autoclaw");
   }

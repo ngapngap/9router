@@ -30,6 +30,15 @@ import { getKeyAccessContext, enforceKeyAccess, filterAdapterModels } from "../s
 import { resolveSmartChoice } from "../services/systemoneRouter.js";
 
 /**
+ * Statuses that mean "this account cannot serve this model at all" rather than
+ * "wait and retry": no points left (402) or a plan that excludes the model (403).
+ * They are passed through instead of being flattened to 503, so the caller does
+ * not sit in a retry loop against an account that will never answer.
+ */
+const ACCOUNT_REFUSAL_STATUSES = new Set([HTTP_STATUS.PAYMENT_REQUIRED, HTTP_STATUS.FORBIDDEN]);
+const isAccountRefusal = (status) => ACCOUNT_REFUSAL_STATUSES.has(Number(status));
+
+/**
  * Handle chat completion request
  * Supports: OpenAI, Claude, Gemini, OpenAI Responses API formats
  * Format detection and translation handled by translator
@@ -283,7 +292,10 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
     if (!credentials || credentials.allRateLimited) {
       if (credentials?.allRateLimited) {
         const errorMsg = lastError || credentials.lastError || "Unavailable";
-        const status = HTTP_STATUS.SERVICE_UNAVAILABLE;
+        // 503 says "try again later", which is right for a locked rate limit and wrong
+        // for an account that cannot serve this at all (no points, plan excludes the
+        // model): those are reported as 402 so the caller stops retrying in a loop.
+        const status = isAccountRefusal(lastStatus) ? lastStatus : HTTP_STATUS.SERVICE_UNAVAILABLE;
         log.warn("CHAT", `[${provider}/${model}] ${errorMsg} (${credentials.retryAfterHuman})`);
         return unavailableResponse(status, `[${provider}/${model}] ${errorMsg}`, credentials.retryAfter, credentials.retryAfterHuman, lastHeaders);
       }

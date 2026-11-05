@@ -313,7 +313,7 @@ export function createSSEStream(options = {}) {
   // chunk that proves the turn produced something; the terminal frames themselves are
   // never held back. A diagnostic frame before any hold is the only way out.
   let released = false;
-  const holdUntilCommit = () => false;
+  const holdUntilCommit = () => targetFormat === FORMATS.OPENAI && sourceFormat === FORMATS.OPENAI_RESPONSES;
   const commitCheckpoint = (output) => {
     released = true;
     const head = encoderHeadOutput();
@@ -477,6 +477,9 @@ export function createSSEStream(options = {}) {
     transform(chunk, controller) {
       activeController = controller;
       if (!ttftAt) ttftAt = Date.now();
+      // A finish_reason in this chunk ends the turn: a held head must not keep waiting for
+      // answer text that will never arrive (a stop-only or usage-only tail chunk).
+      let sawTurnEnd = false;
       const text = decoder.decode(chunk, { stream: true });
       buffer += text;
       reqLogger?.appendProviderChunk?.(text);
@@ -524,7 +527,10 @@ export function createSSEStream(options = {}) {
               // A terminal-only chunk (no content, no reasoning) is not forwarded below, but
               // it is the upstream closing the turn: record it as soon as it parses, so no
               // `continue` below can skip past it.
-              if (mode === STREAM_MODE.PASSTHROUGH && typeof parsed.choices?.[0]?.finish_reason === "string") closeSeen = true;
+              if (mode === STREAM_MODE.PASSTHROUGH && typeof parsed.choices?.[0]?.finish_reason === "string") {
+                closeSeen = true;
+                sawTurnEnd = true;
+              }
 
               const idFixed = fixInvalidId(parsed);
 
@@ -687,9 +693,11 @@ export function createSSEStream(options = {}) {
           continue;
         }
         noteStreamEvent("upstream", parsed, targetFormat);
-        // Same-format streaming (OpenAI client ← OpenAI upstream) is relayed one line at a
-        // time below, never through the translator, so the relay is where a real close shows.
-        if (mode === STREAM_MODE.PASSTHROUGH && parsed.choices?.[0]?.finish_reason) clientCloseSeen = true;
+        // A finish_reason in this chunk ends the turn: a held head must not keep waiting
+        // for answer text that will never arrive (a stop-only or usage-only tail chunk).
+        // It is not by itself a close the client received (the relay may synthesize the
+        // close at flush), so only the turn-end flag is raised here.
+        if (mode === STREAM_MODE.PASSTHROUGH && parsed.choices?.[0]?.finish_reason) sawTurnEnd = true;
 
         // Responses API same-format passthrough: preserve event framing + track terminal state
         const isOpenAIResponsesStream = targetFormat === FORMATS.OPENAI_RESPONSES;
@@ -720,11 +728,14 @@ export function createSSEStream(options = {}) {
           // An upstream [DONE] is a real close of the turn (noteStreamEvent: not synthetic),
           // unlike the finish_reason-only frame a translator may fabricate at flush.
           noteStreamEvent("upstream", parsed, targetFormat);
+          // Nothing has gone out yet: closeOpenAILane() below emits the client's [DONE], and
+          // it skips a stream already marked as closed. Setting the flag here made a
+          // translated stream end after its finish frame with no sentinel at all.
           if (responseFormatDeferred()) {
             // The deferred response.completed is released at [DONE], not at transport EOF:
             // a chat upstream can send the sentinel and keep the connection open. The
-            // sentinel is emitted right after that terminal event.
-            streamDoneSent = true;
+            // sentinel is emitted right after that terminal event (by closeClientRelay,
+            // which marks it — so it is not pre-marked here).
             flushPendingCompletion(controller);
             return;
           }
@@ -841,6 +852,10 @@ export function createSSEStream(options = {}) {
           }
         }
 
+        // The turn is over: everything still held for the commit decision goes out now,
+        // ahead of the terminal frames the close will emit.
+        if (sawTurnEnd && !released && holdUntilCommit()) releaseHead(controller);
+
         // The completion deferral can outlive the upstream: a broken chat upstream
         // may stall after finish_reason with no usage trailer and no [DONE], holding
         // the connection open. Bound the wait so the client still gets a terminal event.
@@ -899,6 +914,8 @@ export function createSSEStream(options = {}) {
           }
           if (!streamDoneSent && !isGeminiFamily) {
             enqueueOutput(controller, SSE_DONE, { commit: true });
+            openAIResponsesDoneSent = true;
+            streamDoneSent = true;
           }
 
           finalizeStream();
@@ -935,6 +952,11 @@ export function createSSEStream(options = {}) {
                 if (item === null || item === undefined) continue;
                 const output = formatSSE(item, sourceFormat);
                 reqLogger?.appendConvertedChunk?.(output);
+                // Same-format relay: a close the client already received is not a cut. It
+                // only counts on the way OUT (`translatorClosed`), never as a close the
+                // UPSTREAM sent — the flush never closes for it, so upstreamTerminalSeen
+                // has to stay false and let flush() send the [DONE] the relay still owes.
+                if (mode === STREAM_MODE.PASSTHROUGH && outputAnnouncesFinish(output)) translatorClosed = true;
                 controller.enqueue(sharedEncoder.encode(output));
               }
             }
@@ -979,7 +1001,11 @@ export function createSSEStream(options = {}) {
           return;
         }
 
-        finalizeStream();
+        // The translator consumed the upstream's finish_reason (translatorClosed) and the
+        // flush pass has nothing left to frame, so it falls through to here: this lane still
+        // owes the client its [DONE]. Only a client that was never given a close (truncated
+        // above) or a Gemini-family client (rejects the sentinel) is left without one.
+        closeOpenAILane(controller);
       } catch (error) {
         console.log("Error in flush:", error);
         finalizeStream();
