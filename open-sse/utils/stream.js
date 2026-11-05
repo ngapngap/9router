@@ -520,6 +520,15 @@ export function createSSEStream(options = {}) {
           // `parsed` is scoped to the try block).
           let relayed = null;
 
+          if (trimmed.startsWith("data:") && trimmed.slice(5).trim() === "[DONE]") {
+            // Upstream sent its own close sentinel: record it so flush() does not
+            // enqueue a second [DONE]. The line itself is forwarded below.
+            streamDoneSent = true;
+            if (relayTerminatesOnDone) relayedCloseSeen = true;
+            upstreamTerminalSeen = true;
+            clientCloseSeen = true;
+          }
+
           if (trimmed.startsWith("data:") && trimmed.slice(5).trim() !== "[DONE]") {
             try {
               let parsed = JSON.parse(trimmed.slice(5).trim());

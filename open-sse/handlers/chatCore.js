@@ -491,8 +491,17 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
   // but is not refreshed into health: the executor that parsed it says so, and
   // refreshing would spend a token round-trip plus an identical retry on the same
   // dead account before the account loop is even reached.
-  const refusedWithoutRefresh = typeof executor.lastRefusalWasPaywall === "function"
+  let refusedWithoutRefresh = typeof executor.lastRefusalWasPaywall === "function"
     && executor.lastRefusalWasPaywall();
+  if (!refusedWithoutRefresh && !providerResponse.ok && typeof executor.readPaywall === "function") {
+    // Parse the body up-front so a paywall sets lastPaywall before the refresh
+    // check (parseUpstreamError runs later, after the refresh decision).
+    try {
+      const text = await providerResponse.clone().text();
+      executor.readPaywall(providerResponse, text);
+      refusedWithoutRefresh = executor.lastRefusalWasPaywall();
+    } catch {}
+  }
   if (!executor.noAuth && !refusedWithoutRefresh
     && (providerResponse.status === HTTP_STATUS.UNAUTHORIZED || providerResponse.status === HTTP_STATUS.FORBIDDEN)) {
     try {

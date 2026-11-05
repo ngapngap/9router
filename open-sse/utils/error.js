@@ -145,7 +145,7 @@ export function unavailableResponse(statusCode, message, retryAfter, retryAfterH
     // retryAfter also rides in the body: combo members read `errorBody.retryAfter` to
     // report when the whole combo can be tried again, and a header-only value made
     // every exhausted combo answer retry-less.
-    JSON.stringify({ error: { message: msg, retryAfter, retryAfterHuman } }),
+    JSON.stringify({ error: { message: msg }, retryAfter, retryAfterHuman }),
     {
       status: statusCode,
       headers: {

@@ -247,6 +247,7 @@ class AutoClawExecutorBase extends DefaultExecutor {
         const message = String(d?.message ?? d?.msg ?? d?.error?.message ?? "");
         const code = d?.code ?? d?.error?.code ?? null;
         if (String(code) === "810000" || QUOTA_WORDS.test(message)) {
+          this.lastPaywall = Date.now();
           return { status: 429, message: "AutoClaw: " + (message || "quota exhausted"), resetsAtMs: null };
         }
         if (String(code) === "410004" || BANNED_WORDS.test(message)) {
