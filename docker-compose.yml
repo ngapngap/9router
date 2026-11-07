@@ -3,7 +3,7 @@ services:
     # Built by .github/workflows/docker-master.yml on every fork master push; pin a
     # sha-<commit> tag (not latest) so a redeploy is reproducible, and `docker compose pull`
     # before `up -d` to pick up a new build.
-    image: ghcr.io/ngapngap/9router:sha-75e970e24a6414396a47a638a2c76aca6d02cb6d
+    image: ghcr.io/ngapngap/9router:sha-80663f46d22283b681c34f9d9387f5a649f488bc
     container_name: 9router
     restart: unless-stopped
     ports:
