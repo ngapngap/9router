@@ -72,9 +72,14 @@ function onStart(credentials) {
 
 function isBusy(status, text) {
   if (status !== 429) return false;
+  const raw = String(text || "");
+  // Plain-text gateway 429s (no JSON body): zcode-plan answers a burst with a
+  // bare "Rate limit exceeded" text, which carries no code 3008/3009. Retry
+  // those too — they clear within seconds, same as the busy codes.
+  if (/rate limit exceeded/i.test(raw)) return true;
   let body;
   try {
-    body = JSON.parse(text);
+    body = JSON.parse(raw);
   } catch {
     return false;
   }

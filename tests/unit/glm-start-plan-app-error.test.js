@@ -89,6 +89,37 @@ describe("GlmExecutor Start Plan app-level errors", () => {
     expect(await response.text()).toBe(sse);
   });
 
+  it("retries a plain-text 429 'Rate limit exceeded' then succeeds (zcode-plan gateway)", async () => {
+    const message = {
+      id: "msg_1",
+      type: "message",
+      role: "assistant",
+      content: [{ type: "text", text: "pong" }],
+      usage: { input_tokens: 3, output_tokens: 1 },
+    };
+    vi.mocked(proxyAwareFetch)
+      .mockResolvedValueOnce(new Response("Rate limit exceeded", { status: 429 }))
+      .mockResolvedValueOnce(new Response("Rate limit exceeded", { status: 429 }))
+      .mockResolvedValueOnce(jsonResponse(message));
+
+    const { response } = await execute(new GlmExecutor("glm"), false);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual(message);
+    expect(proxyAwareFetch).toHaveBeenCalledTimes(3);
+  });
+
+  it("gives up with the plain-text 429 after busy retries exhaust", async () => {
+    vi.mocked(proxyAwareFetch).mockImplementation(async () =>
+      new Response("Rate limit exceeded", { status: 429 }));
+
+    const { response } = await execute(new GlmExecutor("glm"), false);
+
+    expect(response.status).toBe(429);
+    expect(await response.text()).toBe("Rate limit exceeded");
+    expect(proxyAwareFetch).toHaveBeenCalledTimes(7); // 1 + BUSY_WAITS.length (6)
+  }, 30000);
+
   it("issues exactly one upstream request (a second URL could overwrite the refusal)", async () => {
     vi.mocked(proxyAwareFetch).mockResolvedValue(jsonResponse({ code: 1005, msg: "exceed quota limit" }));
 
