@@ -1,3 +1,10 @@
+# v0.5.115-fork (2026-11-08)
+
+## Fixes
+- **GLM/ZCode Start Plan**: retry plain-text `429 Rate limit exceeded` responses from `zcode.z.ai/api/v1/zcode-plan` — the executor's busy-retry (codes `3008`/`3009`, `BUSY_WAITS` [250,500,900,1600,2800,4000]ms) only matched JSON bodies, so these gateway 429s surfaced immediately as combo 503s. `isBusy()` now also matches the bare text body, so the same request is retried in-executor for up to ~10s before giving up
+- **Docs**: rewrite README for this fork (remove upstream content, document fork additions)
+- **Docker**: bump compose image pin to `sha-80663f46` and move personal host paths (`/home/ubuntu/...`) to `${HOME}/...` variables
+
 # v0.5.112 (2026-10-28)
 
 ## Features
