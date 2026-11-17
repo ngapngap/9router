@@ -36,6 +36,38 @@ const PAYVIEW_KINDS = new Set(["pay-view", "pay-cn", "upgrade", "subscribe"]);
 // How long a parsed refusal is remembered as "the last error" for the refresh shortcut.
 const REFUSAL_MEMORY_MS = 30 * 1000;
 const BANNED_WORDS = /\bbanned\b|封禁|封号|账号异常|账户异常|account (has been |is |was )?(suspended|frozen|disabled|blocked|restricted)/i;
+// AutoClaw's queue system answers a request it will not start right now with HTTP 200 and
+// an SSE stream that never carries an assistant delta:
+//   event: zwork_queue
+//   data: {"status":"queueing","title":"High demand right now",
+//          "subtitle":"You're in the queue. Upgrade to a subscription for a dedicated
+//                      priority queue.","upgrade_button_content":"Upgrade now"}
+// The status is 200, so nothing upstream of the account loop sees a failure: the turn is
+// recorded as a success, the client is handed a stream whose only payload is "you're in the
+// queue", and no other account or combo member is ever tried — the request just dies with
+// no retry. The queue event is a transient refusal, not content, so the leading frames are
+// read here and raised as a real 429 before the body reaches chatCore.
+const QUEUE_EVENT = /^event:\s*zwork_queue/m;
+const QUEUE_STATUS = /"status"\s*:\s*"queueing"/;
+const QUEUE_SUBTITLE = /"subtitle"\s*:\s*"([^"]*)"/;
+// A normal turn's first frame proves the request was accepted; stop peeking at once so a
+// healthy stream is never delayed. The queue frame arrives before any content frame.
+const CONTENT_FRAME = /^data:\s*\{[^\n]*"choices"/m;
+const QUEUE_PEEK_BYTES = 16 * 1024;
+const QUEUE_PEEK_MS = 10 * 1000;
+
+// True when a decoded buffer already shows the request was accepted (a content frame), so the
+// peek can stop at once and hand the stream back untouched.
+function sawContentFrame(text) {
+  return CONTENT_FRAME.test(text);
+}
+
+// True when the queue refusal is already readable: the event line plus its `queueing` payload.
+// Checked per chunk so the refusal is acted on without waiting for a close the upstream may
+// never send — a queued upstream can hold the connection open indefinitely.
+function sawQueueFrame(text) {
+  return QUEUE_EVENT.test(text) && QUEUE_STATUS.test(text);
+}
 
 function md5Hex(input) {
   return createHash("md5").update(input).digest("hex");
@@ -233,6 +265,98 @@ async function refusedNotSignIn(res) {
   return new Response(JSON.stringify({ error: { message: "AutoClaw: " + (message || "account refused"), type: spent ? "rate_limit_error" : "permission_error", code } }), { status: spent ? 429 : 403, headers: { "Content-Type": "application/json" } });
 }
 
+/**
+ * Read only the head of a streaming 2xx response and report AutoClaw's queue refusal.
+ *
+ * The queue event is the one refusal that hides behind a success status, so no status-based
+ * rule can catch it: the account loop, the combo loop and the request log all see `ok`. It
+ * must be caught before the body is handed to the stream layer, because by then the client
+ * already has a 200 and only the queue payload.
+ *
+ * Returns null when there is nothing to peek (no body, non-2xx, non-SSE). Otherwise returns
+ * `{ queued, response }`: `queued: true` with a 429 to fall through to the next account or
+ * combo member, or `queued: false` with the same stream rebuilt byte for byte (the peek
+ * consumed its head, so the original body is gone either way). The peek fails open on its
+ * byte/time bound — a slow but healthy stream is never turned into an error.
+ */
+async function queueRefusal(response, signal = null) {
+  if (!response?.body || Number(response.status) >= 400) return null;
+  const contentType = (response.headers.get("content-type") || "").toLowerCase();
+  if (!contentType.includes("text/event-stream")) return null;
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  const head = [];
+  let text = "";
+  let timer = null;
+  let ended = false;
+  const deadline = new Promise((resolve) => { timer = setTimeout(() => resolve("__deadline__"), QUEUE_PEEK_MS); });
+
+  try {
+    while (text.length < QUEUE_PEEK_BYTES) {
+      if (signal?.aborted) break; // client gone: fail open, the stream layer reports it
+      const res = await Promise.race([reader.read(), deadline]);
+      if (res === "__deadline__") break; // bound reached: fail open
+      const { done, value } = res;
+      if (done) { ended = true; break; }
+      head.push(value);
+      text += decoder.decode(value, { stream: true });
+      // The queue frame is complete as soon as its data line arrives — decide on it right
+      // away instead of waiting for the stream to close (the upstream may hold it open).
+      if (sawQueueFrame(text)) break;
+      if (sawContentFrame(text)) break; // a real turn: stop peeking at once
+    }
+    if (ended || (!sawContentFrame(text) && !sawQueueFrame(text))) text += decoder.decode();
+  } catch {
+    // A read error belongs to the stream layer, not here: replay and let it report.
+    ended = true;
+  } finally {
+    if (timer) { clearTimeout(timer); timer = null; }
+  }
+
+  const queued = sawQueueFrame(text);
+
+  if (queued) {
+    // Nothing in a queue stream is usable: drop it and report a real rate limit.
+    try { await reader.cancel(); } catch { /* already closed */ }
+    const said = QUEUE_SUBTITLE.exec(text)?.[1] || "You're in the queue.";
+    return {
+      queued: true,
+      response: new Response(JSON.stringify({
+        error: {
+          message: "AutoClaw: " + said + " — upstream answered HTTP 200 with a queue event instead of a completion",
+          type: "rate_limit_error",
+          code: 810003,
+        },
+      }), { status: 429, headers: { "Content-Type": "application/json" } }),
+    };
+  }
+
+  // Healthy (or unreadable): rebuild the body so the consumed bytes are replayed in order.
+  // `ended` means the peek already drained the whole stream, so the head it buffered IS the
+  // complete body — nothing is left to read.
+  const body = new ReadableStream({
+    start(controller) {
+      for (const chunk of head) controller.enqueue(chunk);
+    },
+    async pull(controller) {
+      if (ended) { controller.close(); return; }
+      try {
+        const { done, value } = await reader.read();
+        if (done) { controller.close(); return; }
+        controller.enqueue(value);
+      } catch (err) {
+        controller.error(err);
+      }
+    },
+    cancel(reason) { try { reader.cancel(reason); } catch { /* already closed */ } },
+  });
+  return {
+    queued: false,
+    response: new Response(body, { status: response.status, statusText: response.statusText, headers: response.headers }),
+  };
+}
+
 class AutoClawExecutorBase extends DefaultExecutor {
   parseError(response, bodyText) {
     const paywall = this.readPaywall(response, bodyText);
@@ -358,6 +482,20 @@ export class AutoClawExecutor extends AutoClawExecutorBase {
     const spent = await refusedNotSignIn(response);
     if (spent) return { response: spent, stop: true };
     return null;
+  }
+
+  async execute(options) {
+    const result = await super.execute(options);
+    // A queue refusal arrives as HTTP 200, so it survives every status check inside
+    // base.execute(). Adopt it as the real response here: the caller then sees a 429,
+    // rotates to the next account, and the combo falls through to the next member.
+    // A healthy stream comes back rebuilt with its peeked head replayed intact, and a
+    // refusal is remembered like the other account-scoped ones so chatCore skips the
+    // token refresh (a queue slot does not improve because the token was re-minted).
+    const peeked = await queueRefusal(result.response, options?.signal);
+    if (!peeked) return result;
+    if (peeked.queued) this.lastPaywall = Date.now();
+    return { ...result, response: peeked.response };
   }
 }
 
