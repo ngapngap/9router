@@ -35,6 +35,9 @@ export function checkFallbackError(status, errorText, backoffLevel = 0, provider
     if (rule.provider && rule.provider !== provider) continue;
     // Text-based rule: match substring in error message
     if (rule.text && lowerError && lowerError.includes(rule.text)) {
+      // A request-scoped fault (the body cannot be served by this member) must not evict
+      // the credential: answer "advance the combo member" and report no account cooldown.
+      if (rule.requestScoped) return { shouldFallback: false, cooldownMs: 0, requestScoped: true };
       if (rule.backoff) {
         const newLevel = Math.min(backoffLevel + 1, BACKOFF_CONFIG.maxLevel);
         return { shouldFallback: true, cooldownMs: getQuotaCooldown(newLevel), newBackoffLevel: newLevel };

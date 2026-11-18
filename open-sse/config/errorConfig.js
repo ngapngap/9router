@@ -72,6 +72,13 @@ export const ERROR_RULES = [
   { text: "credit balance is too low", backoff: true },
   { text: "capacity",                 backoff: true },
   { text: "overloaded",               backoff: true },
+  // AutoClaw answers a history it cannot read (an agentic transcript far past what its
+  // gateway parses) with HTTP 500 `{"message":"parse response failed"}` after ~25s. The
+  // fault is in the REQUEST, not the credential: every account in the pool returns the
+  // same 500 for the same body, so cooling accounts down one by one only walks the whole
+  // pool into `unavailable` and leaves unrelated requests with no account at all. Mark it
+  // request-scoped so the member advances without a cooldown.
+  { text: "parse response failed", requestScoped: true },
 
   // --- Status-based rules (fallback when text doesn't match) ---
   { status: 401, cooldownMs: COOLDOWN.long },
