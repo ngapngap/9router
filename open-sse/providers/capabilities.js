@@ -238,6 +238,22 @@ const DEVIN_CLI_GPT_CAPS = { vision: true, reasoning: true, search: true, thinki
  * Provider-specific capability overrides. Keyed by provider alias/id.
  */
 export const PROVIDER_CAPABILITIES = {
+  // AutoClaw (autoglm proxy) — zai_glm-5.3-flash DOES accept images; verified live
+  // through the gateway (correctly described a two-colour test image). The generic
+  // *glm-5.3* pattern declares no modality, and autoclaw is absent from the models.dev
+  // catalog, so without this entry the router sees vision:false, strips every image
+  // from the request, and the capacity adapter wastes a call on a free fallback model.
+  // The other three autoclaw ids (zai_auto, zai-auto-fast, zaicoding_glm-5.3) answer
+  // "I can't see the image" when probed with the same payload, so they stay text-only.
+  // Values restate the resolved *glm-5.3* pattern: a provider override short-circuits
+  // every later layer (MODEL_CAPABILITIES, patterns, catalog), so the limits and the
+  // thinking shape have to be spelled out here or they are lost.
+  "autoclaw": {
+    "zai_glm-5.3-flash": { vision: true, reasoning: true, thinkingFormat: "zai", thinkingEffortSupported: true, thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 128000 },
+  },
+  "aclawgl": {
+    "zai_glm-5.3-flash": { vision: true, reasoning: true, thinkingFormat: "zai", thinkingEffortSupported: true, thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 128000 },
+  },
   // NVIDIA NIM is OpenAI-compatible → rejects MiniMax/GLM native `thinking` field.
   // Force openai reasoning_effort format for its reasoning models. #issue
   "nvidia": {
