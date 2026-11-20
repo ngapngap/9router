@@ -33,3 +33,12 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+
+# Local ops files — never ship (contain account emails / host config)
+.account-email-cache.json
+.locked-reported.json
+.error-check.log
+*.bak
+docker-compose.override.yml
+__pycache__/
+*.diff
