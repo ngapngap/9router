@@ -3,6 +3,7 @@ import { OAUTH_ENDPOINTS, GITHUB_COPILOT, buildKimiHeaders } from "../../config/
 import { proxyAwareFetch } from "../../utils/proxyFetch.js";
 import { dedupRefresh } from "./dedup.js";
 import { buildExternalIdpRefreshParams } from "../../../src/lib/oauth/kiroExternalIdp.js";
+import { createHash, randomUUID } from "node:crypto";
 
 let _xaiServiceSingleton = null;
 export async function refreshXaiToken(refreshToken, log) {
@@ -514,7 +515,14 @@ export async function refreshCopilotToken(githubAccessToken, log) {
 // token is a JWT carrying device_id; SMS accounts (source_id agent*) start
 // on the CN host, Google/z.ai ones on the global one. Rotation: the new
 // refresh token replaces the old one.
-export async function refreshAutoClawToken(refreshToken, log, isCn = false) {
+//
+// appId/appKey để ký `X-Auth-Sign`. Đây là fingerprint của desktop client
+// (giá trị nhúng sẵn trong client chính thức), KHÔNG phải secret của ta —
+// nên hard-code là đúng, đổi thành config chỉ làm chữ ký lệch.
+const AUTH_APP_ID = "100003";
+const AUTH_APP_KEY = "38d2391985e2369a5fb8227d8e6cd5e5";
+
+export async function refreshAutoClawToken(refreshToken, log, isCn = false, accessToken = "") {
   if (!refreshToken) return null;
   return dedupRefresh(isCn ? "autoclaw-cn" : "autoclaw", refreshToken, async () => {
     const part = refreshToken.split(".")[1];
@@ -535,17 +543,39 @@ export async function refreshAutoClawToken(refreshToken, log, isCn = false) {
     for (const base of bases) {
       for (const path of ["/userapi/v1/refresh", "/userapi/v1/agent-refresh"]) {
         try {
+          // ── Client fingerprint (bắt buộc) ──────────────────────────────
+          // X-Auth-Sign = MD5(appId&ts&appKey), ts tính bằng GIÂY. Đây là
+          // fingerprint của desktop client AutoClaw (appId/appKey nhúng sẵn
+          // trong client), upstream dùng nó để nhận ra client chính thức.
+          // Thiếu/ sai chữ ký -> code 400002 (rồi mới rơi xuống agent-refresh).
+          // `X-Tm` phải là "win": upstream chặn `linux`/`linux-x64` với 403.
+          // X-Harness-Type GIỮ "zcode" trên đường userapi (đường chat thì bỏ).
+          const ts = String(Math.floor(Date.now() / 1000));
+          const sign = createHash("md5").update(`${AUTH_APP_ID}&${ts}&${AUTH_APP_KEY}`).digest("hex");
           const response = await fetch(base + path, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
               Accept: "*/*",
-              "User-Agent": isCn ? "AutoClaw/2.1.0 (linux-x64)" : "AutoClaw/1.18.1 (linux-x64)",
-              "X-Version": isCn ? "2.1.0" : "1.18.1",
-              "X-Tm": "linux-x64",
+              "User-Agent": isCn ? "AutoClaw/2.1.0 (win32)" : "AutoClaw/1.18.5 (win32)",
+              "X-Version": isCn ? "2.1.0" : "1.18.5",
+              "X-Tm": "win",
               "X-Product": "autoclaw",
-              "X-Auth-Appid": "100003",
-              "X-Auth-TimeStamp": String(Math.floor(Date.now() / 1000)),
+              "X-Client-Type": "pc",
+              "X-Harness-Type": "zcode",
+              "X-Lang": "zh-CN",
+              "X-Channel": "official",
+              "X-Auth-Appid": AUTH_APP_ID,
+              "X-Auth-TimeStamp": ts,
+              "X-Auth-Sign": sign,
+              "X-Trace-Id": randomUUID(),
+              // Bearer access token cũ (agent2api gửi kèm). Bỏ tiền tố
+              // `Bearer ` trùng nếu có — gửi `Bearer Bearer …` sẽ bị coi là
+              // token sai (401 Invalid token).
+              ...(() => {
+                const bare = String(accessToken || "").replace(/^bearer\s+/i, "").trim();
+                return bare ? { authorization: `Bearer ${bare}` } : {};
+              })(),
             },
             body,
           });

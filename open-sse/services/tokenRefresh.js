@@ -154,7 +154,9 @@ const REFRESH_HANDLERS = {
   "codebuddy-intl": (c, log) => refreshCodebuddyIntlToken(c.refreshToken, log),
   // AutoClaw: refresh token rotation across the two hosts; SMS accounts
   // (source_id agent*) start on the CN host, Google/z.ai ones on the global.
-  autoclaw: (c, log) => refreshAutoClawToken(c.refreshToken, log, false),
+  // Truyền accessToken hiện tại để refresh gửi kèm `authorization` (giống
+  // desktop client thật; agent2api cũng làm vậy).
+  autoclaw: (c, log) => refreshAutoClawToken(c.refreshToken, log, false, c.accessToken),
   workbuddy: (c, log) => refreshCodebuddyToken(c.refreshToken, log),
   "workbuddy-ai": (c, log) => refreshCodebuddyIntlToken(c.refreshToken, log),
   trae: (c, log) => refreshTraeToken(c.refreshToken, c, log),
